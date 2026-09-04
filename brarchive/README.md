@@ -1,10 +1,15 @@
 # brarchive
 
-Creates `.brarchive` files from the staged `BP` and `RP` packs. This filter does not modify or obfuscate pack contents.
+Creates Bedrock-compatible `__brarchive` directories in the staged `BP` and
+`RP` packs.
 
-Settings:
+The filter includes a native Node.js encoder and does not require an external
+executable.
 
-- `tool`: path to the `brarchive` executable, relative to the addon workspace.
-- `archiveDir`: output directory, relative to the addon workspace.
-- `bpArchive`: behavior pack archive filename.
-- `rpArchive`: resource pack archive filename.
+The filter archives the files in each pack directory separately, matching the
+structure produced by Bedrock. For example, files in `RP/entity` become
+`RP/__brarchive/entity.brarchive`, and files in `RP/models/entity` become
+`RP/__brarchive/models/entity.brarchive`. Pack metadata remains unarchived.
+
+Regolith's `target: "local"` export writes the resulting pack folders to the
+workspace `build` directory, so no output directory setting is required.
