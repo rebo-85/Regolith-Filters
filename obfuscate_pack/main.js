@@ -98,7 +98,13 @@ function obfuscateJson(source) {
 }
 
 function isFixedName(rel) {
-  return rel === "manifest.json" || rel === "textures/textures_list.json" || rel === "texts/languages.json" || /^loot_tables(?:\/|$)/i.test(rel);
+  return (
+    rel === "manifest.json" ||
+    rel === "textures/textures_list.json" ||
+    rel === "texts/languages.json" ||
+    /\.texture_set\.json$/i.test(rel) ||
+    /^loot_tables(?:\/|$)/i.test(rel)
+  );
 }
 
 function obfuscatePack(pack, packName, map) {
