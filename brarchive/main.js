@@ -61,9 +61,11 @@ function writeArchive(pack, output) {
 }
 
 function archivePack(pack) {
+  const excluded = new Set(["font", "loot_tables", "materials", "scripts", "sounds", "subpacks", "texts", "textures"]);
   const files = walk(pack).filter((file) => {
     const name = path.relative(pack, file).replace(/\\/g, "/");
-    return name !== "manifest.json" && name !== "pack_icon.png" && !name.startsWith("__brarchive/");
+    const top = name.split("/", 1)[0];
+    return name !== "manifest.json" && name !== "pack_icon.png" && !name.startsWith("__brarchive/") && !excluded.has(top);
   });
   if (files.length === 0) return;
   const groups = new Map();
