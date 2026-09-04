@@ -7,7 +7,7 @@ const root = process.env.ROOT_DIR;
 if (!root) throw new Error("ROOT_DIR environment variable is required");
 const args = process.argv[2] ? JSON.parse(process.argv[2]) : {};
 const tmpDir = path.join(root, ".regolith", "tmp");
-const mapDir = path.resolve(root, args.mapDir ?? ".obfuscation");
+const mapDir = path.resolve(root, args.mapDir ?? "packs/data/obfuscate_pack");
 const mapFile = path.join(mapDir, "map.json");
 
 function walk(dir, files = []) {
@@ -102,7 +102,7 @@ function isFixedName(rel) {
 }
 
 function obfuscatePack(pack, packName, map) {
-  const stage = path.join(tmpDir, `.obfuscate-${packName}`);
+  const stage = path.join(tmpDir, `packs/data/obfuscate_pack/${packName}`);
   fs.rmSync(stage, { recursive: true, force: true });
   fs.mkdirSync(stage, { recursive: true });
   for (const source of walk(pack)) {
