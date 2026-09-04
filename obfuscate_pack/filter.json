@@ -1,0 +1,11 @@
+{
+  "description": "Obfuscates JSON pack filenames and contents while preserving stable mappings.",
+  "filters": [
+    {
+      "name": "Obfuscate pack",
+      "runWith": "nodejs",
+      "script": "./main.js"
+    }
+  ],
+  "version": "0.1.0"
+}

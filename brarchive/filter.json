@@ -1,0 +1,11 @@
+{
+  "description": "Archives staged behavior and resource packs with brarchive.",
+  "filters": [
+    {
+      "name": "Create brarchive files",
+      "runWith": "nodejs",
+      "script": "./main.js"
+    }
+  ],
+  "version": "0.1.0"
+}
