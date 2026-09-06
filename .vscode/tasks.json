@@ -3,38 +3,15 @@
   "tasks": [
     {
       "type": "shell",
-      "command": "Write-Host ''; Write-Host 'Changeset instructions:' -ForegroundColor Green; Write-Host '1. Up/Down moves through options.' -ForegroundColor Cyan; Write-Host '2. Space selects or deselects the highlighted option.' -ForegroundColor Cyan; Write-Host '3. Enter confirms each screen.' -ForegroundColor Cyan; Write-Host '4. Select only the filters you changed.' -ForegroundColor Yellow; Write-Host '5. Leave major unchecked unless the change is breaking.' -ForegroundColor Yellow; Write-Host '6. For a minor release, select packages on the minor screen.' -ForegroundColor Yellow; Write-Host '7. For a patch release, leave major and minor empty, then select packages on the patch screen.' -ForegroundColor Yellow; Write-Host '8. Type a summary when prompted, then press Enter.' -ForegroundColor Cyan; Write-Host '9. If Notepad opens, type the summary, save, and close Notepad.' -ForegroundColor Cyan; Write-Host 'After the summary, this task applies the version bumps automatically.' -ForegroundColor Green; Write-Host ''; corepack pnpm changeset",
+      "command": "corepack pnpm run release:prepare",
       "problemMatcher": [],
-      "label": "Create Changeset"
+      "label": "Create Changeset and Apply Version Bumps"
     },
     {
       "type": "shell",
-      "command": "corepack pnpm run version",
-      "problemMatcher": [],
-      "label": "Apply Version Bumps"
-    },
-    {
-      "type": "shell",
-      "command": "corepack pnpm run release",
-      "problemMatcher": [],
-      "label": "Create Release Tags"
-    },
-    {
-      "type": "shell",
-      "command": "$pending = Get-ChildItem '.changeset' -Filter '*.md' -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne 'README.md' }; if ($pending) { Write-Host 'Pending changesets found. Run Apply Version Bumps before publishing.' -ForegroundColor Red; exit 1 }; corepack pnpm run release; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; git push --follow-tags",
+      "command": "corepack pnpm run release:publish",
       "problemMatcher": [],
       "label": "Publish Release"
-    },
-    {
-      "type": "shell",
-      "command": "node scripts/sync-versions.js",
-      "problemMatcher": [],
-      "label": "Sync Filter Versions"
-    },
-    {
-      "dependsOn": ["Create Changeset", "Apply Version Bumps"],
-      "dependsOrder": "sequence",
-      "label": "Create Changeset and Apply Version Bumps"
     }
   ]
 }

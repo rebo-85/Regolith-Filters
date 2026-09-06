@@ -5,7 +5,9 @@
   "scripts": {
     "changeset": "changeset",
     "version": "changeset version && node scripts/sync-versions.js",
-    "release": "changeset tag"
+    "release": "changeset tag",
+    "release:prepare": "changeset && pnpm run version",
+    "release:publish": "pnpm run release && git push --follow-tags"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.0"
