@@ -14,7 +14,7 @@ After changing one or more filters, use the VS Code Command Palette
 (`Tasks: Run Task`) and run these three steps:
 
 1. Run **Create Changeset and Apply Version Bumps**.
-2. Review the changed files and commit them in GitHub Desktop.
+2. Review the changed files and commit them in GitHub.
 3. Run **Publish Release**. It creates the tags and pushes the commit and tags.
 
 During the Changeset prompts:
