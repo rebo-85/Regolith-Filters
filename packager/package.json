@@ -1,6 +1,6 @@
 {
-  "name": "@rebo/packager",
-  "version": "0.3.0",
+  "name": "packager",
+  "version": "0.5.0",
   "private": true,
   "description": "Regolith filter that packages staged Bedrock packs as mcpack and mcaddon files."
 }

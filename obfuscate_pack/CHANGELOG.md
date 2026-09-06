@@ -1,4 +1,16 @@
-# @rebo/obfuscate-pack
+# obfuscate-pack
+
+## 0.5.0
+
+### Minor Changes
+
+- update
+
+## 0.4.0
+
+### Minor Changes
+
+- update
 
 ## 0.3.0
 
