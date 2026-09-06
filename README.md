@@ -4,9 +4,9 @@ Reusable Regolith filters for ReBo Bedrock addon repositories.
 
 ## Filters
 
-- `obfuscate_pack`: obfuscates staged JSON pack files and keeps stable names in the project's `.obfuscation/map.json`.
-- `brarchive`: archives staged `BP` and `RP` packs with a native Node.js encoder.
-- `packager`: packages staged behavior and resource packs as `.mcpack` and `.mcaddon` files.
+- `obfuscate_pack`: Obfuscates JSON pack filenames and contents while preserving stable mappings.
+- `brarchive`: Archives staged behavior and resource packs with brarchive.
+- `packager`: Packages staged behavior and resource packs as mcpack and mcaddon files.
 
 ## Release Workflow
 

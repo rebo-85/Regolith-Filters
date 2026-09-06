@@ -16,6 +16,8 @@ for (const name of packages) {
   writeFileSync(filterPath, `${JSON.stringify(filter, null, 2)}\n`);
   const filterPattern = new RegExp(`(  "${name}": \\{\\r?\\n    "url": "github\\.com/rebo-85/Regolith-Filters",\\r?\\n    "version": ")[^"]+(")`);
   readme = readme.replace(filterPattern, `$1${pkg.name}@${pkg.version}$2`);
+  const descriptionPattern = new RegExp("^- `" + name + "`:.*$", "m");
+  readme = readme.replace(descriptionPattern, `- \`${name}\`: ${filter.description}`);
   console.log(`${name}: ${pkg.version}`);
 }
 
