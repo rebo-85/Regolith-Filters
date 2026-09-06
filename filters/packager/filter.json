@@ -1,0 +1,11 @@
+{
+  "description": "Packages staged behavior and resource packs as mcpack and mcaddon files.",
+  "filters": [
+    {
+      "name": "Package packs",
+      "runWith": "nodejs",
+      "script": "./src/main.js"
+    }
+  ],
+  "version": "0.2.0"
+}

@@ -23,7 +23,21 @@ function removeEmptyDirs(dir) {
   if (dir !== path.dirname(dir) && fs.readdirSync(dir).length === 0) fs.rmdirSync(dir);
 }
 
-function writeArchive(pack, output) {
+function stripComments(text) {
+  return text.replace(/("(?:\\.|[^"\\])*"|\/\/[^\r\n]*|\/\*[\s\S]*?\*\/)/g, (match) => {
+    return match.startsWith('"') ? match : match.replace(/[^\r\n]/g, " ");
+  });
+}
+
+function validateManifest(pack) {
+  const manifestPath = path.join(pack, "manifest.json");
+  const manifest = JSON.parse(stripComments(fs.readFileSync(manifestPath, "utf8")));
+  if (!manifest.header || !Object.prototype.hasOwnProperty.call(manifest.header, "pack_optimization_version")) {
+    throw new Error(`${manifestPath} must define header.pack_optimization_version`);
+  }
+}
+
+function writeArchive(pack, output, includeContent = () => true) {
   const files = walk(pack);
   if (files.length > 0xffffffff) throw new Error("Too many archive entries");
   const desc = [];
@@ -33,7 +47,7 @@ function writeArchive(pack, output) {
     const name = path.relative(pack, file).replace(/\\/g, "/");
     const nameBuf = Buffer.from(name, "utf8");
     if (nameBuf.length > 247) throw new Error(`Archive entry name is too long: ${name}`);
-    const content = fs.readFileSync(file);
+    const content = includeContent(file) ? fs.readFileSync(file) : Buffer.alloc(0);
     if (content.length > 0xffffffff || offset > 0xffffffff - content.length) throw new Error("Archive content is too large");
     desc.push([nameBuf, offset, content.length]);
     data.push(content);
@@ -99,9 +113,11 @@ function archivePack(pack) {
   removeEmptyDirs(pack);
 }
 
-for (const name of ["BP", "RP"]) {
-  const pack = path.join(tmpDir, name);
-  if (!fs.existsSync(pack)) continue;
+const packs = ["BP", "RP"].map((name) => path.join(tmpDir, name)).filter((pack) => fs.existsSync(pack));
+
+for (const pack of packs) validateManifest(pack);
+
+for (const pack of packs) {
   archivePack(pack);
-  console.log(`[brarchive] Archived ${name} into ${path.relative(root, path.join(pack, "__brarchive"))}`);
+  console.log(`[brarchive] Archived ${path.basename(pack)} into ${path.relative(root, path.join(pack, "__brarchive"))}`);
 }

@@ -1,0 +1,14 @@
+{
+  "name": "@rebo/regolith-filters",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "changeset": "changeset",
+    "version": "changeset version && node scripts/sync-versions.js",
+    "release": "changeset tag"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.0"
+  },
+  "packageManager": "pnpm@10.14.0"
+}

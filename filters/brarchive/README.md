@@ -10,6 +10,9 @@ The filter archives the files in each pack directory separately, matching the
 structure produced by Bedrock. For example, files in `RP/entity` become
 `RP/__brarchive/entity.brarchive`, and files in `RP/models/entity` become
 `RP/__brarchive/models/entity.brarchive`. Pack metadata remains unarchived.
+The entire `textures/` directory remains unpacked because Bedrock requires
+texture assets and `.texture_set.json` metadata at their loose paths. Other
+archived files are stored in the archive with their contents.
 
 Regolith's `target: "local"` export writes the resulting pack folders to the
 workspace `build` directory, so no output directory setting is required.

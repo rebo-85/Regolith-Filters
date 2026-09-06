@@ -1,0 +1,4 @@
+packages:
+  - "filters/brarchive"
+  - "filters/obfuscate_pack"
+  - "filters/packager"
