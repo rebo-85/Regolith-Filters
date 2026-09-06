@@ -4,8 +4,8 @@
     {
       "name": "Create brarchive files",
       "runWith": "nodejs",
-      "script": "./main.js"
+      "script": "./src/main.js"
     }
   ],
-  "version": "0.2.0"
+  "version": "0.3.0"
 }

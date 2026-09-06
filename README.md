@@ -36,21 +36,26 @@ corepack pnpm run release:publish
 
 ## Regolith configuration
 
-Reference the repository root and select the filter by its directory name:
+Each release tag includes the standalone `obfuscate_pack`, `brarchive`, and
+`packager` directories at the repository root. Reference the repository root
+and select the filter by its directory name:
 
 ```json
 "filterDefinitions": {
   "obfuscate_pack": {
     "url": "github.com/rebo-85/Regolith-Filters",
-    "version": "v0.2.0"
+    "version": "@rebo/obfuscate-pack@0.3.0"
   },
   "brarchive": {
     "url": "github.com/rebo-85/Regolith-Filters",
-    "version": "v0.2.0"
+    "version": "@rebo/brarchive@0.3.0"
   },
   "packager": {
     "url": "github.com/rebo-85/Regolith-Filters",
-    "version": "v0.2.0"
+    "version": "@rebo/packager@0.3.0"
   }
 }
 ```
+
+Do not append a filter subdirectory to the repository URL. Regolith 1.8.0
+tries to clone that URL as a repository instead of selecting a directory.
