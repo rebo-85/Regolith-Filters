@@ -1,5 +1,11 @@
 # obfuscate-pack
 
+## 0.5.2
+
+### Patch Changes
+
+- update
+
 ## 0.5.1
 
 ### Patch Changes

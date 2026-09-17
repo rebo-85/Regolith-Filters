@@ -121,6 +121,13 @@ function collectGeometryDefinitions(geometries, symbols) {
   }
 }
 
+function collectBlockCullingDefinitions(definitions, symbols) {
+  for (const rule of definitions?.rules ?? []) {
+    const bone = rule?.geometry_part?.bone;
+    if (typeof bone === "string") ensure(symbols, "bones", bone);
+  }
+}
+
 function collectRenderDefinitions(controllers, symbols) {
   for (const [name, controller] of Object.entries(controllers ?? {})) {
     if (name.startsWith("controller.")) ensure(symbols, "refs", name);
@@ -255,6 +262,8 @@ function transform(value, symbols, context = "") {
         nextKey = `array.${symbols.aliases[name] ?? name}`;
       } else if (context === "animation_bones" && symbols.bones[key]) {
         nextKey = symbols.bones[key];
+      } else if (context === "bone_visibility" && symbols.bones[key]) {
+        nextKey = symbols.bones[key];
       } else if (context === "bones" && key === "name") {
         childContext = "bone_name";
       } else if (context === "bones" && key === "parent") {
@@ -269,6 +278,7 @@ function transform(value, symbols, context = "") {
       if (context === "arrays" && key !== "textures") childContext = "array_definition";
       if (context === "arrays" && key === "textures") childContext = "array_definition";
       if (context === "geometry_root" && key === "bones") childContext = "bones";
+      if (context === "geometry_root" && key === "bone_visibility") childContext = "bone_visibility";
       if (context === "animation" && key === "bones") childContext = "animation_bones";
       if (context === "geometry_part" && key === "bone") childContext = "bone_name";
       if (key === "minecraft:geometry") childContext = "geometry_root";
@@ -357,6 +367,7 @@ export function collectSymbols(source, symbols) {
   if (value?.animations) collectAnimationDefinitions(value.animations, symbols);
   if (value?.render_controllers) collectRenderDefinitions(value.render_controllers, symbols);
   if (value?.sound_definitions) collectSoundDefinitions(value.sound_definitions, symbols);
+  if (value?.["minecraft:block_culling_rules"]) collectBlockCullingDefinitions(value["minecraft:block_culling_rules"], symbols);
   if (path.basename(source).toLowerCase() === "music_definitions.json") collectMusicDefinitions(value, symbols);
   if (Array.isArray(value?.["minecraft:geometry"])) collectGeometryDefinitions(value["minecraft:geometry"], symbols);
 }
