@@ -145,19 +145,33 @@ function collectMusicDefinitions(definitions, symbols) {
   }
 }
 
+function escapePattern(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function replaceExactTokens(value, entries) {
+  let result = value;
+  for (const [original, replacement] of entries) {
+    if (!original) continue;
+    const pattern = new RegExp(`(^|[^A-Za-z0-9_:/-])${escapePattern(original)}(?=$|[^A-Za-z0-9_:/-])`, "g");
+    result = result.replace(pattern, (match, prefix) => `${prefix}${replacement}`);
+  }
+  return result;
+}
+
 export function replaceString(value, symbols) {
   let result = value;
   for (const [original, replacement] of Object.entries(symbols.paths).sort(([a], [b]) => b.length - a.length)) {
-    result = result.split(original).join(replacement);
+    result = replaceExactTokens(result, [[original, replacement]]);
   }
   for (const [original, replacement] of Object.entries(symbols.refs).sort(([a], [b]) => b.length - a.length)) {
-    result = result.split(original).join(refName(original, replacement));
+    result = replaceExactTokens(result, [[original, refName(original, replacement)]]);
   }
   for (const [original, replacement] of Object.entries(symbols.aliases).sort(([a], [b]) => b.length - a.length)) {
-    result = result.split(original).join(aliasName(original, replacement));
+    result = replaceExactTokens(result, [[original, aliasName(original, replacement)]]);
     if (!original.includes(".")) {
       for (const prefix of ["texture.", "Geometry.", "Material.", "Array."])
-        result = result.split(`${prefix}${original}`).join(`${prefix}${aliasName(original, replacement)}`);
+        result = replaceExactTokens(result, [[`${prefix}${original}`, `${prefix}${aliasName(original, replacement)}`]]);
     }
   }
   result = result.replace(/\bv\.([A-Za-z_][\w]*)/g, (_, name) => `v.${symbols.vars[name] ?? name}`);
@@ -167,10 +181,10 @@ export function replaceString(value, symbols) {
 export function replaceScriptString(value, symbols) {
   let result = value;
   for (const [original, replacement] of Object.entries(symbols.paths).sort(([a], [b]) => b.length - a.length)) {
-    result = result.split(original).join(replacement);
+    result = replaceExactTokens(result, [[original, replacement]]);
   }
   for (const [original, replacement] of Object.entries(symbols.refs).sort(([a], [b]) => b.length - a.length)) {
-    result = result.split(original).join(refName(original, replacement));
+    result = replaceExactTokens(result, [[original, refName(original, replacement)]]);
   }
   return result;
 }
@@ -256,6 +270,7 @@ function transform(value, symbols, context = "") {
       if (context === "arrays" && key === "textures") childContext = "array_definition";
       if (context === "geometry_root" && key === "bones") childContext = "bones";
       if (context === "animation" && key === "bones") childContext = "animation_bones";
+      if (context === "geometry_part" && key === "bone") childContext = "bone_name";
       if (key === "minecraft:geometry") childContext = "geometry_root";
       return [nextKey, transform(item, symbols, childContext)];
     })
