@@ -14,6 +14,8 @@ Generated keys and filenames use the same six-character lowercase letter format,
 
 Set the filter setting `"unicode": true` to encode JSON string content as `\uXXXX` escapes. The option is disabled by default and does not change JSON structure.
 
+Set `"flattenFolders": true` to place obfuscated files directly under their pack root folders instead of retaining obfuscated category subfolders. Required lookup roots such as `models/blocks` and `models/entity` are preserved; files below those roots may still be obfuscated. The option is disabled by default.
+
 The filter also rewrites identifiers inside `.lang` translation keys after `name_ninja` runs, while preserving the human-readable translation values.
 
 Client-entity aliases are only obfuscated when their values resolve to definitions or assets present in the staged packs. Vanilla animation, geometry, material, and texture references are left unchanged.

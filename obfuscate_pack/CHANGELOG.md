@@ -1,5 +1,13 @@
 # obfuscate-pack
 
+## 0.7.0
+
+### Minor Changes
+
+#### Added
+
+- Folder flattening feature
+
 ## 0.6.0
 
 ### Minor Changes
