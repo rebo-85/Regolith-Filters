@@ -1,16 +1,20 @@
 # obfuscate-pack
 
-## 0.5.2
+## 0.6.0
 
-### Patch Changes
+### Minor Changes
 
-- update
+#### Added
 
-## 0.5.1
+- child folders path obfuscation
+- block culling files obfuscation
+- block states obfuscation
+- particle files obfuscation
 
-### Patch Changes
+#### Fixed
 
-- update
+- block.json is accidentally renamed.
+- special child folders of RP/models ('blocks' \& 'entity') were accidentally renamed.
 
 ## 0.5.0
 

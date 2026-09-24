@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const {
   obfuscateJson,
+  obfuscateJsonText,
   obfuscateLang,
   obfuscateTextureList,
   obfuscateTextureSet,
@@ -13,12 +14,14 @@ const {
   walk,
   readMap,
   writeMap,
-  replaceScriptString
+  replaceScriptString,
+  setUnicodeEnabled
 } = require("./utils");
 
 const root = process.env.ROOT_DIR;
 if (!root) throw new Error("ROOT_DIR environment variable is required");
 const args = process.argv[2] ? JSON.parse(process.argv[2]) : {};
+setUnicodeEnabled(args.unicode === true);
 const tmpDir = path.join(root, ".regolith", "tmp");
 const mapDir = path.resolve(root, args.mapDir ?? "packs/data/obfuscate_pack");
 const mapFile = path.join(mapDir, "map.json");
@@ -34,7 +37,10 @@ function isFixedName(rel) {
   rel = rel.toLowerCase();
   return (
     rel === "manifest.json" ||
+    rel === "blocks.json" ||
     rel === "textures/textures_list.json" ||
+    rel === "textures/item_texture.json" ||
+    rel === "textures/terrain_texture.json" ||
     rel === "texts/languages.json" ||
     rel === "sounds/sound_definitions.json" ||
     rel === "sounds/music_definitions.json" ||
@@ -46,10 +52,36 @@ function hashName(value, ext = "") {
   return `${makeKey(value)}${ext}`;
 }
 
+function isFixedDirectory(rel) {
+  rel = rel.toLowerCase();
+  return rel === "models" || rel === "models/blocks" || rel === "models/entity";
+}
+
+function registerDirectoryPaths(rel, packName, map, symbols) {
+  const parts = rel.split("/");
+  if (parts.length < 2) return;
+  const mapped = [parts[0]];
+  map.__dirs ??= {};
+  for (let idx = 1; idx < parts.length - 1; idx++) {
+    const sourceRel = parts.slice(0, idx + 1).join("/");
+    const key = `${packName.toLowerCase()}/${sourceRel}`;
+    const name = isFixedDirectory(sourceRel) ? parts[idx] : (map.__dirs[key] ?? hashName(key));
+    if (isFixedDirectory(sourceRel)) delete map.__dirs[key];
+    else map.__dirs[key] = name;
+    mapped.push(name);
+    symbols.paths[sourceRel] = mapped.join("/");
+  }
+}
+
+function mappedParentFor(rel, symbols) {
+  const parent = path.posix.dirname(rel);
+  return symbols.paths[parent] ?? parent;
+}
+
 function targetRelFor(rel, packName, map, symbols) {
   const key = `${packName.toLowerCase()}/${rel}`;
   if (map[key]) {
-    const targetRel = map[key].includes("/") ? map[key] : path.posix.join(path.posix.dirname(rel), map[key]);
+    const targetRel = map[key].includes("/") ? map[key] : path.posix.join(mappedParentFor(rel, symbols), map[key]);
     symbols.paths[rel] = targetRel;
     return targetRel;
   }
@@ -60,7 +92,7 @@ function targetRelFor(rel, packName, map, symbols) {
   let suffix = 1;
   while (used.has(target) || used.has(path.posix.join(path.posix.dirname(rel), target))) target = hashName(`${key}:${suffix++}`, ext);
   map[key] = target;
-  const targetRel = path.posix.join(path.posix.dirname(rel), target);
+  const targetRel = path.posix.join(mappedParentFor(rel, symbols), target);
   symbols.paths[rel] = targetRel;
   return targetRel;
 }
@@ -68,7 +100,13 @@ function targetRelFor(rel, packName, map, symbols) {
 function registerTexturePaths(pack, packName, map, symbols) {
   for (const source of walk(path.join(pack, "textures"))) {
     const rel = path.relative(pack, source).replace(/\\/g, "/");
-    if (rel === "textures/textures_list.json") continue;
+    if (isFixedName(rel)) {
+      delete map[`${packName.toLowerCase()}/${rel}`];
+      delete symbols.paths[rel];
+      delete symbols.paths[rel.slice(0, -path.posix.extname(rel).length)];
+      delete map.__paths?.[`${packName.toLowerCase()}/${rel}`];
+      continue;
+    }
     const parts = rel.split("/");
     const mapped = [parts[0]];
     for (let idx = 1; idx < parts.length; idx++) {
@@ -122,6 +160,10 @@ function obfuscatePack(pack, packName, map, symbols) {
   const files = walk(pack);
   for (const source of files) {
     const rel = path.relative(pack, source).replace(/\\/g, "/");
+    registerDirectoryPaths(rel, packName, map, symbols);
+  }
+  for (const source of files) {
+    const rel = path.relative(pack, source).replace(/\\/g, "/");
     if (/^loot_tables\//i.test(rel)) targetRelFor(rel, packName, map, symbols);
   }
   for (const source of files) {
@@ -141,8 +183,9 @@ function obfuscatePack(pack, packName, map, symbols) {
         while (used.has(name)) name = hashName(`${key}:${suffix++}`, ext);
         map[key] = name;
       }
-      targetRel = path.posix.join(path.posix.dirname(rel), name);
+      targetRel = path.posix.join(mappedParentFor(rel, symbols), name);
     }
+    if (targetRel !== rel) symbols.paths[rel] = targetRel;
     const target = path.join(stage, targetRel);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     if (ext === ".json" && (!isFixedName(rel) || /^sounds\/(?:sound|music)_definitions\.json$/i.test(rel) || /\.texture_set\.json$/i.test(rel))) {
@@ -159,6 +202,8 @@ function obfuscatePack(pack, packName, map, symbols) {
       }
     } else if (rel === "textures/textures_list.json") {
       fs.writeFileSync(target, obfuscateTextureList(source, symbols), "utf8");
+    } else if (ext === ".json" && args.unicode === true) {
+      fs.writeFileSync(target, obfuscateJsonText(source), "utf8");
     } else if (ext === ".lang") {
       fs.writeFileSync(target, obfuscateLang(source, symbols), "utf8");
     } else if (ext === ".js") {
@@ -173,6 +218,10 @@ const clientSources = [];
 for (const name of ["BP", "RP"]) {
   const pack = path.join(tmpDir, name);
   if (fs.existsSync(pack)) {
+    for (const source of walk(pack)) {
+      const rel = path.relative(pack, source).replace(/\\/g, "/");
+      registerDirectoryPaths(rel, name, map, symbols);
+    }
     registerTexturePaths(pack, name, map, symbols);
     registerSoundPaths(pack, name, map, symbols);
     for (const source of walk(pack)) {

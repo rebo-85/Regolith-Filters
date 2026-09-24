@@ -25,8 +25,59 @@ export function writeMap(map, mapDir, mapFile) {
   fs.writeFileSync(mapFile, JSON.stringify(map, null, 2), "utf8");
 }
 
-function serialize(value) {
-  return JSON.stringify(value);
+function serialize(value, indent) {
+  const text = JSON.stringify(value, null, indent);
+  return unicodeJsonText(text);
+}
+
+let unicodeEnabled = false;
+
+function encodeUnicodeString(value) {
+  let result = "";
+  for (const char of value) result += `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`;
+  return result;
+}
+
+function unicodeJsonText(text) {
+  if (!unicodeEnabled) return text;
+  let result = "";
+  let idx = 0;
+  let preserveVersion = false;
+  while (idx < text.length) {
+    if (text[idx] !== '"') {
+      result += text[idx++];
+      continue;
+    }
+    const start = idx++;
+    let value = "";
+    let escaped = false;
+    while (idx < text.length) {
+      const char = text[idx++];
+      if (escaped) {
+        value += `\\${char}`;
+        escaped = false;
+      } else if (char === "\\") {
+        value += char;
+        escaped = true;
+      } else if (char === '"') break;
+      else value += char;
+    }
+    let next = idx;
+    while (/\s/.test(text[next] ?? "")) next++;
+    const isKey = text[next] === ":";
+    const keep = preserveVersion || (isKey && value === "format_version");
+    result += keep ? text.slice(start, idx) : `"${encodeUnicodeString(value)}"`;
+    preserveVersion = preserveVersion ? false : isKey && value === "format_version";
+  }
+  return result;
+}
+
+export function setUnicodeEnabled(enabled) {
+  unicodeEnabled = enabled === true;
+}
+
+export function obfuscateJsonText(source) {
+  return unicodeJsonText(fs.readFileSync(source, "utf8"));
 }
 
 export function makeKey(value) {
@@ -122,10 +173,22 @@ function collectGeometryDefinitions(geometries, symbols) {
 }
 
 function collectBlockCullingDefinitions(definitions, symbols) {
+  if (typeof definitions?.description?.identifier === "string") ensure(symbols, "refs", definitions.description.identifier);
   for (const rule of definitions?.rules ?? []) {
     const bone = rule?.geometry_part?.bone;
     if (typeof bone === "string") ensure(symbols, "bones", bone);
   }
+}
+
+function collectBlockDefinitions(block, symbols) {
+  for (const name of Object.keys(block?.description?.states ?? {})) {
+    if (!name.startsWith("minecraft:")) ensureAlias(symbols, name);
+  }
+}
+
+function collectParticleDefinitions(particle, symbols) {
+  const identifier = particle?.description?.identifier;
+  if (typeof identifier === "string" && !identifier.startsWith("minecraft:")) ensure(symbols, "refs", identifier);
 }
 
 function collectRenderDefinitions(controllers, symbols) {
@@ -166,6 +229,16 @@ function replaceExactTokens(value, entries) {
   return result;
 }
 
+function replaceTokenSet(value, entries) {
+  if (!entries.length) return value;
+  const replacements = new Map(entries);
+  const pattern = new RegExp(
+    `(^|[^A-Za-z0-9_:/-])(${entries.map(([original]) => escapePattern(original)).join("|")})(?=$|[^A-Za-z0-9_:/-])`,
+    "g"
+  );
+  return value.replace(pattern, (match, prefix, original) => `${prefix}${replacements.get(original)}`);
+}
+
 export function replaceString(value, symbols) {
   let result = value;
   for (const [original, replacement] of Object.entries(symbols.paths).sort(([a], [b]) => b.length - a.length)) {
@@ -174,8 +247,11 @@ export function replaceString(value, symbols) {
   for (const [original, replacement] of Object.entries(symbols.refs).sort(([a], [b]) => b.length - a.length)) {
     result = replaceExactTokens(result, [[original, refName(original, replacement)]]);
   }
-  for (const [original, replacement] of Object.entries(symbols.aliases).sort(([a], [b]) => b.length - a.length)) {
-    result = replaceExactTokens(result, [[original, aliasName(original, replacement)]]);
+  const aliases = Object.entries(symbols.aliases)
+    .sort(([a], [b]) => b.length - a.length)
+    .map(([original, replacement]) => [original, aliasName(original, replacement)]);
+  result = replaceTokenSet(result, aliases);
+  for (const [original, replacement] of aliases) {
     if (!original.includes(".")) {
       for (const prefix of ["texture.", "Geometry.", "Material.", "Array."])
         result = replaceExactTokens(result, [[`${prefix}${original}`, `${prefix}${aliasName(original, replacement)}`]]);
@@ -193,6 +269,12 @@ export function replaceScriptString(value, symbols) {
   for (const [original, replacement] of Object.entries(symbols.refs).sort(([a], [b]) => b.length - a.length)) {
     result = replaceExactTokens(result, [[original, refName(original, replacement)]]);
   }
+  result = replaceTokenSet(
+    result,
+    Object.entries(symbols.aliases)
+      .sort(([a], [b]) => b.length - a.length)
+      .map(([original, replacement]) => [original, aliasName(original, replacement)])
+  );
   return result;
 }
 
@@ -210,9 +292,8 @@ export function obfuscateLang(source, symbols) {
 
 export function obfuscateTextureList(source, symbols) {
   const values = JSON.parse(fs.readFileSync(source, "utf8"));
-  return JSON.stringify(
+  return serialize(
     values.map((value) => symbols.paths[value] ?? value),
-    null,
     "\t"
   );
 }
@@ -348,6 +429,8 @@ export function createSymbols(map) {
     symbols.keyFormat = "letters6-v5";
   }
   symbols.aliases ??= symbols.keys ?? {};
+  const mappedAliases = new Set(Object.values(symbols.aliases));
+  for (const key of Object.keys(symbols.aliases)) if (mappedAliases.has(key)) delete symbols.aliases[key];
   symbols.refs ??= {};
   symbols.vars ??= {};
   symbols.states ??= {};
@@ -368,6 +451,8 @@ export function collectSymbols(source, symbols) {
   if (value?.render_controllers) collectRenderDefinitions(value.render_controllers, symbols);
   if (value?.sound_definitions) collectSoundDefinitions(value.sound_definitions, symbols);
   if (value?.["minecraft:block_culling_rules"]) collectBlockCullingDefinitions(value["minecraft:block_culling_rules"], symbols);
+  if (value?.["minecraft:block"]) collectBlockDefinitions(value["minecraft:block"], symbols);
+  if (value?.particle_effect) collectParticleDefinitions(value.particle_effect, symbols);
   if (path.basename(source).toLowerCase() === "music_definitions.json") collectMusicDefinitions(value, symbols);
   if (Array.isArray(value?.["minecraft:geometry"])) collectGeometryDefinitions(value["minecraft:geometry"], symbols);
 }
