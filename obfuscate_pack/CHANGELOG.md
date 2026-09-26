@@ -1,5 +1,11 @@
 # obfuscate-pack
 
+## 0.7.1
+
+### Patch Changes
+
+- Publish the current obfuscate_pack implementation under a new patch tag so Regolith installs the updated source.
+
 ## 0.7.0
 
 ### Minor Changes
