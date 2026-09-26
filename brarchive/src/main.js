@@ -6,6 +6,7 @@ const root = process.env.ROOT_DIR;
 if (!root) throw new Error("ROOT_DIR environment variable is required");
 const args = process.argv[2] ? JSON.parse(process.argv[2]) : {};
 const tmpDir = path.join(root, ".regolith", "tmp");
+
 function walk(dir, files = []) {
   for (const name of fs.readdirSync(dir).sort()) {
     const file = path.join(dir, name);
@@ -75,7 +76,8 @@ function writeArchive(pack, output, includeContent = () => true) {
 }
 
 function archivePack(pack) {
-  const excluded = new Set(["font", "loot_tables", "materials", "scripts", "sounds", "subpacks", "texts", "textures"]);
+  // Exclude folders that shouldn't be archived. 'scripts' and 'textures' are now omitted from this set to be archived.
+  const excluded = new Set(args.excluded || ["font", "loot_tables", "materials", "sounds", "subpacks", "texts"]);
   const files = walk(pack).filter((file) => {
     const name = path.relative(pack, file).replace(/\\/g, "/");
     const top = name.split("/", 1)[0];

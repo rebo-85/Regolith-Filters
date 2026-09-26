@@ -1,6 +1,6 @@
 {
   "name": "brarchive",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "description": "Regolith filter that archives staged behavior and resource packs."
 }

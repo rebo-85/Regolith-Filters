@@ -1,5 +1,18 @@
 # obfuscate-pack
 
+## 0.8.0
+
+### Minor Changes
+
+#### Fixed
+
+- manifest.json unicode bug: Fixed key "header" getting skipped during unicode encoding after format_version.
+- Crash in packer.js: Resolved ReferenceError: targetMapFile is not defined.
+
+#### Added
+
+- Custom map file setting: Added "mapFile" (e.g. "mapFile": "build.map.json") so different profiles keep separate map files.
+
 ## 0.7.1
 
 ### Patch Changes

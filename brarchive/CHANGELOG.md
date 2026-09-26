@@ -1,5 +1,13 @@
 # brarchive
 
+## 0.5.1
+
+### Patch Changes
+
+#### Fixed
+
+- Texture Set File Flattening: Resolved an issue where .texture_set.json files were incorrectly categorized as fixed-name assets and skipped during folder flattening.
+
 ## 0.5.0
 
 ### Minor Changes

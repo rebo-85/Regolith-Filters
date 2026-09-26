@@ -13,7 +13,9 @@ const args = process.argv[2] ? JSON.parse(process.argv[2]) : {};
 setUnicodeEnabled(args.unicode === true);
 
 const mapDir = path.resolve(root, args.mapDir ?? "packs/data/obfuscate_pack");
-const mapFile = path.join(mapDir, "map.json");
+const mapFileName = args.mapFile ?? (args.profile ? `${args.profile}.map.json` : "map.json");
+const mapFile = path.join(mapDir, mapFileName);
+
 let map;
 try {
   map = JSON.parse(fs.readFileSync(mapFile, "utf8"));
@@ -28,6 +30,6 @@ if (map.__format !== MAP_FORMAT) {
 
 const symbols = createSymbols(map);
 const paths = createPathMapper({ flattenFolders: args.flattenFolders === true });
-const flattened = createPacker({ root, args, map, symbols, paths }).run();
+const flattened = createPacker({ root, args, map, symbols, paths, mapFile }).run();
 
 if (flattened) console.log("Folders flattened, but client might need a restart for all changes to take effect.");

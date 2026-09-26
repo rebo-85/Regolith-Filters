@@ -44,11 +44,11 @@ and select the filter by its directory name:
 "filterDefinitions": {
   "obfuscate_pack": {
     "url": "github.com/rebo-85/Regolith-Filters",
-    "version": "obfuscate-pack@0.7.1"
+    "version": "obfuscate-pack@0.8.0"
   },
   "brarchive": {
     "url": "github.com/rebo-85/Regolith-Filters",
-    "version": "brarchive@0.5.0"
+    "version": "brarchive@0.5.1"
   },
   "packager": {
     "url": "github.com/rebo-85/Regolith-Filters",

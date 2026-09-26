@@ -22,10 +22,11 @@ function isJson(source) {
   return path.extname(source).toLowerCase() === ".json";
 }
 
-export function createPacker({ root, args, map, symbols, paths }) {
+export function createPacker({ root, args, map, symbols, paths, mapFile }) {
   const tmpDir = path.join(root, ".regolith", "tmp");
   const mapDir = path.resolve(root, args.mapDir ?? "packs/data/obfuscate_pack");
-  const mapFile = path.join(mapDir, "map.json");
+  const mapFileName = args.mapFile ?? (args.profile ? `${args.profile}.map.json` : "map.json");
+  const targetMapFile = mapFile ?? path.join(mapDir, mapFileName);
 
   function registerPack(pack, packName) {
     const files = walk(pack);
@@ -55,7 +56,19 @@ export function createPacker({ root, args, map, symbols, paths }) {
     if (LOOT_TABLE_PATTERN.test(rel)) targetRel = paths.targetRelFor(rel, packName, map, symbols);
     if (/^textures\//i.test(rel) && rel !== "textures/textures_list.json") targetRel = symbols.paths[rel] ?? rel;
     if (/^sounds\//i.test(rel) && rel !== "sounds/sound_definitions.json") targetRel = symbols.paths[rel] ?? rel;
-    if (ext === ".json" && !paths.isFixedName(rel) && !LOOT_TABLE_PATTERN.test(rel)) {
+    if (/\.texture_set\.json$/i.test(rel)) {
+      const textureSetTarget = symbols.paths[rel] ?? targetRel;
+      if (textureSetTarget !== rel) targetRel = textureSetTarget;
+      else {
+        const pngRel = rel.replace(/\.texture_set\.json$/i, ".png");
+        const mappedTexture = symbols.paths[pngRel] ?? path.posix.basename(pngRel);
+        const baseName = path.posix.basename(mappedTexture, ".png");
+        const name = `${baseName}.texture_set.json`;
+        targetRel = path.posix.join(paths.mappedParentFor(rel, symbols), name);
+      }
+      symbols.paths[rel] = targetRel;
+      map[key] = path.posix.basename(targetRel);
+    } else if (ext === ".json" && !paths.isFixedName(rel) && !LOOT_TABLE_PATTERN.test(rel)) {
       let name = map[key];
       if (!name) {
         name = paths.hashName(key, ext);
@@ -121,7 +134,8 @@ export function createPacker({ root, args, map, symbols, paths }) {
     }
     delete symbols.used;
     fs.mkdirSync(mapDir, { recursive: true });
-    fs.writeFileSync(mapFile, JSON.stringify(map, null, 2), "utf8");
+
+    fs.writeFileSync(targetMapFile, JSON.stringify(map, null, 2), "utf8");
     return args.flattenFolders === true;
   }
 

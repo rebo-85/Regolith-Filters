@@ -17,7 +17,6 @@ export function unicodeJsonText(text) {
   if (!unicodeEnabled) return text;
   let result = "";
   let idx = 0;
-  let preserveVersion = false;
   while (idx < text.length) {
     if (text[idx] !== '"') {
       result += text[idx++];
@@ -40,9 +39,8 @@ export function unicodeJsonText(text) {
     let next = idx;
     while (/\s/.test(text[next] ?? "")) next++;
     const isKey = text[next] === ":";
-    const keep = preserveVersion || (isKey && value === "format_version");
+    const keep = isKey && value === "format_version";
     result += keep ? text.slice(start, idx) : `"${encodeUnicodeString(value)}"`;
-    preserveVersion = preserveVersion ? false : isKey && value === "format_version";
   }
   return result;
 }
@@ -104,7 +102,7 @@ function replaceExactTokens(value, entries) {
   for (const [original, replacement] of entries) {
     if (!original) continue;
     const pattern = new RegExp(`(^|[^A-Za-z0-9_:/-])${escapePattern(original)}(?=$|[^A-Za-z0-9_:/-])`, "g");
-    result = result.replace(pattern, (match, prefix) => `${prefix}${replacement}`);
+    result = result.replace(pattern, (match, prefix) => (prefix === "." ? match : `${prefix}${replacement}`));
   }
   return result;
 }
@@ -113,7 +111,7 @@ function replaceTokenSet(value, entries) {
   if (!entries.length) return value;
   const replacements = new Map(entries);
   const pattern = new RegExp(`(^|[^A-Za-z0-9_:/-])(${entries.map(([original]) => escapePattern(original)).join("|")})(?=$|[^A-Za-z0-9_:/-])`, "g");
-  return value.replace(pattern, (match, prefix, original) => `${prefix}${replacements.get(original)}`);
+  return value.replace(pattern, (match, prefix, original) => (prefix === "." ? match : `${prefix}${replacements.get(original)}`));
 }
 
 function refName(value, name) {

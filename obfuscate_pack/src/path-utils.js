@@ -4,7 +4,7 @@ import { makeKey } from "./symbols.js";
 import { FIXED_DIRECTORIES, FIXED_FILES, SOUND_DEFINITION_PATTERN, TEXTURE_SET_PATTERN } from "./constants.js";
 
 export function createPathMapper({ flattenFolders }) {
-  const isFixedName = (rel) => FIXED_FILES.has(rel.toLowerCase()) || TEXTURE_SET_PATTERN.test(rel);
+  const isFixedName = (rel) => FIXED_FILES.has(rel.toLowerCase());
   const hashName = (value, ext = "") => `${makeKey(value)}${ext}`;
   const isFixedDirectory = (rel) => FIXED_DIRECTORIES.has(rel.toLowerCase());
 
