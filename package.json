@@ -5,7 +5,7 @@
   "scripts": {
     "changeset": "changeset",
     "version": "changeset version && node scripts/sync-versions.js",
-    "release": "changeset tag",
+    "release": "node scripts/check-release.js && changeset tag",
     "release:prepare": "changeset && corepack pnpm run version",
     "release:publish": "corepack pnpm run release && git push --follow-tags"
   },

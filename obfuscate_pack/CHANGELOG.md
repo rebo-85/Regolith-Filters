@@ -1,5 +1,11 @@
 # obfuscate-pack
 
+## 0.8.1
+
+### Patch Changes
+
+- minor fixes
+
 ## 0.8.0
 
 ### Minor Changes
@@ -7,7 +13,7 @@
 #### Fixed
 
 - manifest.json unicode bug: Fixed key "header" getting skipped during unicode encoding after format_version.
-- Crash in packer.js: Resolved ReferenceError: targetMapFile is not defined.
+- Texture Set File Flattening: Resolved an issue where .texture_set.json files were incorrectly categorized as fixed-name assets and skipped during folder flattening.
 
 #### Added
 

@@ -14,8 +14,10 @@ After changing one or more filters, use the VS Code Command Palette
 (`Tasks: Run Task`) and run these three steps:
 
 1. Run **Create Changeset and Apply Version Bumps**.
-2. Review the changed files and commit them in GitHub.
-3. Run **Publish Release**. It creates the tags and pushes the commit and tags.
+2. Review the changed files, then commit and push them to `main`.
+3. Run **Publish Release** only after your local checkout is synced with `origin/main`.
+   The release command checks that the working tree is clean, the checkout matches
+   `origin/main`, and existing version tags contain matching package metadata.
 
 During the Changeset prompts:
 
@@ -26,6 +28,7 @@ During the Changeset prompts:
 - For a minor release, select the changed filters on the minor screen.
 - Use a major release only for breaking changes.
 - Enter a summary when prompted. If Notepad opens, save the summary and close it.
+  This text only becomes changelog content; it does not affect which commit is tagged.
 
 The tasks call these package scripts:
 
@@ -44,11 +47,11 @@ and select the filter by its directory name:
 "filterDefinitions": {
   "obfuscate_pack": {
     "url": "github.com/rebo-85/Regolith-Filters",
-    "version": "obfuscate-pack@0.8.0"
+    "version": "obfuscate-pack@0.8.1"
   },
   "brarchive": {
     "url": "github.com/rebo-85/Regolith-Filters",
-    "version": "brarchive@0.5.1"
+    "version": "brarchive@0.5.2"
   },
   "packager": {
     "url": "github.com/rebo-85/Regolith-Filters",
