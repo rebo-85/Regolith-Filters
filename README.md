@@ -51,7 +51,7 @@ and select the filter by its directory name:
   },
   "brarchive": {
     "url": "github.com/rebo-85/Regolith-Filters",
-    "version": "brarchive@0.5.2"
+    "version": "brarchive@0.5.3"
   },
   "packager": {
     "url": "github.com/rebo-85/Regolith-Filters",

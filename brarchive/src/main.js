@@ -76,12 +76,11 @@ function writeArchive(pack, output, includeContent = () => true) {
 }
 
 function archivePack(pack) {
-  // Exclude folders that shouldn't be archived. 'scripts' and 'textures' are now omitted from this set to be archived.
-  const excluded = new Set(args.excluded || ["font", "loot_tables", "materials", "sounds", "subpacks", "texts"]);
+  const excluded = new Set(args.excluded);
   const files = walk(pack).filter((file) => {
     const name = path.relative(pack, file).replace(/\\/g, "/");
     const top = name.split("/", 1)[0];
-    return name !== "manifest.json" && name !== "pack_icon.png" && !name.startsWith("__brarchive/") && !excluded.has(top);
+    return name !== "manifest.json" && name !== "pack_icon.png" && name !== "blocks.json" && !name.startsWith("__brarchive/") && !excluded.has(top);
   });
   if (files.length === 0) return;
   const groups = new Map();
