@@ -1,5 +1,11 @@
 # packager
 
+## 0.5.1
+
+### Patch Changes
+
+- change log messages
+
 ## 0.5.0
 
 ### Minor Changes

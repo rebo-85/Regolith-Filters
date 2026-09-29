@@ -6,8 +6,7 @@
     "changeset": "changeset",
     "version": "changeset version && node scripts/sync-versions.js",
     "release": "node scripts/check-release.js && changeset tag",
-    "release:prepare": "changeset && corepack pnpm run version",
-    "release:publish": "corepack pnpm run release && git push --follow-tags"
+    "release:prepare": "changeset && corepack pnpm run version"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.0"

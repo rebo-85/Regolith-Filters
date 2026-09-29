@@ -1,5 +1,11 @@
 # brarchive
 
+## 0.5.4
+
+### Patch Changes
+
+- change log messages
+
 ## 0.5.3
 
 ### Patch Changes

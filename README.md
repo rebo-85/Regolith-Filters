@@ -11,13 +11,15 @@ Reusable Regolith filters for ReBo Bedrock addon repositories.
 ## Release Workflow
 
 After changing one or more filters, use the VS Code Command Palette
-(`Tasks: Run Task`) and run these three steps:
+(`Tasks: Run Task`) and run these steps:
 
 1. Run **Create Changeset and Apply Version Bumps**.
 2. Review the changed files, then commit and push them to `main`.
-3. Run **Publish Release** only after your local checkout is synced with `origin/main`.
-   The release command checks that the working tree is clean, the checkout matches
-   `origin/main`, and existing version tags contain matching package metadata.
+
+The GitHub Actions release workflow publishes the packages after the push. Do not
+publish locally; the release command checks that the working tree is clean, the
+checkout matches `origin/main`, and existing version tags contain matching package
+metadata.
 
 During the Changeset prompts:
 
@@ -30,11 +32,10 @@ During the Changeset prompts:
 - Enter a summary when prompted. If Notepad opens, save the summary and close it.
   This text only becomes changelog content; it does not affect which commit is tagged.
 
-The tasks call these package scripts:
+The task calls this package script:
 
 ```text
 corepack pnpm run release:prepare
-corepack pnpm run release:publish
 ```
 
 ## Regolith configuration
@@ -51,11 +52,11 @@ and select the filter by its directory name:
   },
   "brarchive": {
     "url": "github.com/rebo-85/Regolith-Filters",
-    "version": "brarchive@0.5.3"
+    "version": "brarchive@0.5.4"
   },
   "packager": {
     "url": "github.com/rebo-85/Regolith-Filters",
-    "version": "packager@0.5.0"
+    "version": "packager@0.5.1"
   }
 }
 ```

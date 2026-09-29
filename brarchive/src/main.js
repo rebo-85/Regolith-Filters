@@ -120,5 +120,5 @@ for (const pack of packs) validateManifest(pack);
 
 for (const pack of packs) {
   archivePack(pack);
-  console.log(`[brarchive] Archived ${path.basename(pack)} into ${path.relative(root, path.join(pack, "__brarchive"))}`);
+  console.log(`Archived ${path.basename(pack)} into ${path.relative(root, path.join(pack, "__brarchive"))}`);
 }
