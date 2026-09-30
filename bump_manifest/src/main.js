@@ -1,30 +1,31 @@
 const fs = require("fs");
 const path = require("path");
 
-const ROOT_DIR = process.env.ROOT_DIR || process.cwd();
-const VERSION_FILE = path.join(ROOT_DIR, "packs", "data", "bump_manifest", "version.json");
+const VERSION_DIR = path.join(".", "data", "bump_manifest");
+const VERSION_FILE = path.join(VERSION_DIR, "version.json");
 
-function getAndIncrementVersion() {
-  let version = [1, 0, 0];
+function createVersionFile() {
+  fs.mkdirSync(VERSION_DIR, { recursive: true });
+  fs.writeFileSync(VERSION_FILE, JSON.stringify({ version: [1, 0, 0] }, null, 4));
+}
 
-  if (fs.existsSync(VERSION_FILE)) {
-    try {
-      const data = JSON.parse(fs.readFileSync(VERSION_FILE, "utf8"));
-      if (Array.isArray(data.version) && data.version.length === 3) {
-        version = data.version;
-      }
-    } catch (e) {
-      console.warn("Failed to read version.json, resetting to [1, 0, 0]");
-    }
-  } else {
-    fs.mkdirSync(path.dirname(VERSION_FILE), { recursive: true });
+function getVersion() {
+  // Create version file if it doesn't exist
+  if (!fs.existsSync(VERSION_FILE)) {
+    createVersionFile();
   }
 
-  // Increment patch version
-  version[2] += 1;
+  // Read version file
+  const fileContent = fs.readFileSync(VERSION_FILE, "utf8");
+  const data = JSON.parse(fileContent);
 
-  fs.writeFileSync(VERSION_FILE, JSON.stringify({ version }, null, 4));
-  return version;
+  // Increment last number in array (patch version)
+  data.version[data.version.length - 1] += 1;
+
+  // Write updated version back to file
+  fs.writeFileSync(VERSION_FILE, JSON.stringify(data, null, 4) + "\n");
+
+  return data.version;
 }
 
 /**
@@ -38,11 +39,7 @@ function formatVersion(versionArray, formatVersionNum) {
   return versionArray;
 }
 
-function updateManifest(manifestPath, versionArray) {
-  if (!fs.existsSync(manifestPath)) return;
-
-  const content = fs.readFileSync(manifestPath, "utf8");
-  const manifest = JSON.parse(content);
+function updateManifest(manifest, versionArray) {
   const formatVer = manifest.format_version || 1;
   const targetVersion = formatVersion(versionArray, formatVer);
 
@@ -51,7 +48,7 @@ function updateManifest(manifestPath, versionArray) {
     manifest.header.version = targetVersion;
   }
 
-  // Update data & resources modules
+  // Update selected modules
   const allowedTypes = new Set(["resources", "data"]);
   if (Array.isArray(manifest.modules)) {
     for (const module of manifest.modules) {
@@ -70,18 +67,28 @@ function updateManifest(manifestPath, versionArray) {
     }
   }
 
-  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
-  console.log(`Updated ${path.relative(ROOT_DIR, manifestPath)} to version:`, targetVersion);
+  return manifest;
 }
 
 function main() {
-  const version = getAndIncrementVersion();
+  const version = getVersion();
   console.log("Current pack version:", version.join("."));
 
   const targetPacks = ["RP", "BP"];
   for (const pack of targetPacks) {
-    const manifestPath = path.join(ROOT_DIR, pack, "manifest.json");
-    updateManifest(manifestPath, version);
+    const manifestPath = path.join(".", pack, "manifest.json");
+
+    if (fs.existsSync(manifestPath)) {
+      try {
+        const content = fs.readFileSync(manifestPath, "utf8");
+        const manifest = JSON.parse(content);
+        const updatedManifest = updateManifest(manifest, version);
+
+        fs.writeFileSync(manifestPath, JSON.stringify(updatedManifest, null, 4) + "\n");
+      } catch (err) {
+        console.error(`Failed to update ${pack}/manifest.json:`, err);
+      }
+    }
   }
 }
 

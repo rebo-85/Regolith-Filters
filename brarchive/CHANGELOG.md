@@ -1,5 +1,11 @@
 # brarchive
 
+## 0.5.5
+
+### Patch Changes
+
+- minor fixes
+
 ## 0.5.4
 
 ### Patch Changes

@@ -1,4 +1,3 @@
-"use strict";
 const fs = require("fs");
 const path = require("path");
 
@@ -114,11 +113,14 @@ function archivePack(pack) {
   removeEmptyDirs(pack);
 }
 
-const packs = ["BP", "RP"].map((name) => path.join(tmpDir, name)).filter((pack) => fs.existsSync(pack));
+function main() {
+  const packs = ["BP", "RP"].map((name) => path.join(tmpDir, name)).filter((pack) => fs.existsSync(pack));
 
-for (const pack of packs) validateManifest(pack);
+  for (const pack of packs) validateManifest(pack);
 
-for (const pack of packs) {
-  archivePack(pack);
-  console.log(`Archived ${path.basename(pack)} into ${path.relative(root, path.join(pack, "__brarchive"))}`);
+  for (const pack of packs) archivePack(pack);
+
+  console.log("Archiving finished successfully.");
 }
+
+main();
