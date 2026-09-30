@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT_DIR = process.env.ROOT_DIR || process.cwd();
-const VERSION_FILE = path.join(ROOT_DIR, "data", "bump_manifest", "version.json");
+const VERSION_FILE = path.join(ROOT_DIR, "packs", "data", "bump_manifest", "version.json");
 
 function getAndIncrementVersion() {
   let version = [1, 0, 0];

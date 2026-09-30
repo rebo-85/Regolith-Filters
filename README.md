@@ -48,11 +48,11 @@ root. Reference the repository root and select the filter by its directory name:
 "filterDefinitions": {
   "bump_manifest": {
     "url": "github.com/rebo-85/Regolith-Filters",
-    "version": "bump_manifest@1.0.1"
+    "version": "bump_manifest@1.0.2"
   },
   "obfuscate_pack": {
     "url": "github.com/rebo-85/Regolith-Filters",
-    "version": "obfuscate_pack@1.0.0"
+    "version": "obfuscate_pack@1.0.1"
   },
   "brarchive": {
     "url": "github.com/rebo-85/Regolith-Filters",

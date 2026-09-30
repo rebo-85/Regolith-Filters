@@ -98,7 +98,7 @@ export function createPacker({ root, args, map, symbols, paths, mapFile }) {
       }
     } else if (rel === "textures/textures_list.json") {
       fs.writeFileSync(target, obfuscateTextureList(source, symbols), "utf8");
-    } else if (ext === ".json" && args.unicode === true) {
+    } else if (ext === ".json" && args.unicode === true && !paths.isFixedName(rel)) {
       fs.writeFileSync(target, obfuscateJsonText(source), "utf8");
     } else if (ext === ".lang") {
       fs.writeFileSync(target, obfuscateLang(source, symbols), "utf8");
