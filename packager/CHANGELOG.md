@@ -1,5 +1,11 @@
 # packager
 
+## 0.5.2
+
+### Patch Changes
+
+- fix bump_manifest incompatibility
+
 ## 0.5.1
 
 ### Patch Changes

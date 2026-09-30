@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const readmePath = join(root, "README.md");
-const packages = ["brarchive", "packager", "obfuscate_pack"];
+const packages = ["bump_manifest", "brarchive", "packager", "obfuscate_pack"];
 let readme = readFileSync(readmePath, "utf8");
 
 for (const name of packages) {

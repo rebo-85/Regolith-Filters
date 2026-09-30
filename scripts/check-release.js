@@ -31,7 +31,7 @@ try {
   const remoteHead = git(["rev-parse", "refs/remotes/origin/main"]);
   if (head !== remoteHead) block("this checkout is not exactly at origin/main. Pull or sync main, then retry.");
 
-  for (const directory of ["brarchive", "obfuscate_pack", "packager"]) {
+  for (const directory of ["bump_manifest", "brarchive", "obfuscate_pack", "packager"]) {
     const pkg = readJson(`${directory}/package.json`);
     const filter = readJson(`${directory}/filter.json`);
     if (filter.version !== pkg.version)

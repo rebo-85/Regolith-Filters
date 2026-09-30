@@ -4,6 +4,7 @@ Reusable Regolith filters for ReBo Bedrock addon repositories.
 
 ## Filters
 
+- `bump_manifest`: Bumps addon manifest version numbers automatically during build
 - `obfuscate_pack`: Obfuscates JSON pack filenames and contents while preserving stable mappings.
 - `brarchive`: Archives staged behavior and resource packs with brarchive.
 - `packager`: Packages staged behavior and resource packs as mcpack and mcaddon files.
@@ -24,7 +25,7 @@ metadata.
 During the Changeset prompts:
 
 - Use `Up` / `Down` to navigate, `Space` to select, and `Enter` to confirm.
-- Select only the filters you changed. Select all three for an all-filter release.
+- Select only the filters you changed. Select all four for an all-filter release.
 - For a patch release, select nothing on the major and minor screens, then select
   the changed filters on the patch screen.
 - For a minor release, select the changed filters on the minor screen.
@@ -40,12 +41,15 @@ corepack pnpm run release:prepare
 
 ## Regolith configuration
 
-Each release tag includes the standalone `obfuscate_pack`, `brarchive`, and
-`packager` directories at the repository root. Reference the repository root
-and select the filter by its directory name:
+Each release tag includes the standalone filter directories at the repository
+root. Reference the repository root and select the filter by its directory name:
 
 ```json
 "filterDefinitions": {
+  "bump_manifest": {
+    "url": "github.com/rebo-85/Regolith-Filters",
+    "version": "bump_manifest@1.0.1"
+  },
   "obfuscate_pack": {
     "url": "github.com/rebo-85/Regolith-Filters",
     "version": "obfuscate-pack@0.8.1"
@@ -56,7 +60,7 @@ and select the filter by its directory name:
   },
   "packager": {
     "url": "github.com/rebo-85/Regolith-Filters",
-    "version": "packager@0.5.1"
+    "version": "packager@0.5.2"
   }
 }
 ```

@@ -1,4 +1,5 @@
 packages:
+  - "bump_manifest"
   - "brarchive"
   - "obfuscate_pack"
   - "packager"

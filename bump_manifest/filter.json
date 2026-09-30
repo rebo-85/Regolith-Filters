@@ -1,0 +1,12 @@
+{
+  "exportData": true,
+  "description": "Bumps addon manifest version numbers automatically during build",
+  "filters": [
+    {
+      "name": "Bump Manifests",
+      "runWith": "nodejs",
+      "script": "./src/main.js"
+    }
+  ],
+  "version": "1.0.1"
+}

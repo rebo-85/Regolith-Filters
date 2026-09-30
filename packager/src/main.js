@@ -94,25 +94,8 @@ function createZip(entries) {
   return Buffer.concat([...local, centralData, end]);
 }
 
-function versionObject(value) {
-  const parts = Array.isArray(value) ? value : typeof value === "string" && /^\d+(?:\.\d+){0,2}$/.test(value) ? value.split(".").map(Number) : null;
-  if (!parts) return value;
-  return {
-    major: parts[0] ?? 0,
-    minor: parts[1] ?? 0,
-    patch: parts[2] ?? 0
-  };
-}
-
 function readPackFile(file, rel) {
-  if (rel !== "manifest.json") return fs.readFileSync(file);
-  const manifest = JSON.parse(fs.readFileSync(file, "utf8"));
-  manifest.header.version = versionObject(manifest.header.version);
-  for (const module of manifest.modules ?? []) module.version = versionObject(module.version);
-  for (const dependency of manifest.dependencies ?? []) {
-    if (dependency.uuid) dependency.version = versionObject(dependency.version);
-  }
-  return Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  return fs.readFileSync(file);
 }
 
 function packDirectory(dir) {
@@ -141,4 +124,4 @@ for (const pack of packs) {
 
 const addonName = `${baseName}.mcaddon`;
 fs.writeFileSync(path.join(outputDir, addonName), createZip(packEntries));
-console.log(`Wrote ${packEntries.length} mcpack file(s) and ${addonName} to ${path.relative(root, outputDir)}`);
+console.log(`[packager] Wrote ${packEntries.length} mcpack file(s) and ${addonName} to ${path.relative(root, outputDir)}`);
