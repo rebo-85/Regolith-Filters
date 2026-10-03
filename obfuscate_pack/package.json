@@ -1,6 +1,6 @@
 {
   "name": "obfuscate_pack",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "Regolith filter that obfuscates JSON pack filenames and contents.",
   "type": "module"

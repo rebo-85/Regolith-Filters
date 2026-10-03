@@ -112,17 +112,12 @@ export function createPathMapper({ flattenFolders }) {
     registerAssetPaths(pack, packName, "sounds", map, symbols, (rel) => SOUND_DEFINITION_PATTERN.test(rel));
   }
 
-  const isDefinitionJson = (rel) => SOUND_DEFINITION_PATTERN.test(rel);
-  const shouldTransformJson = (rel) => !isFixedName(rel) || isDefinitionJson(rel) || TEXTURE_SET_PATTERN.test(rel);
-
   return {
     hashName,
     isFixedName,
     registerDirectoryPaths,
     registerTexturePaths,
     registerSoundPaths,
-    shouldCollectSymbols: shouldTransformJson,
-    shouldTransformJson,
     targetRelFor,
     mappedParentFor
   };

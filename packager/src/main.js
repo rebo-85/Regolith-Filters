@@ -124,4 +124,4 @@ for (const pack of packs) {
 
 const addonName = `${baseName}.mcaddon`;
 fs.writeFileSync(path.join(outputDir, addonName), createZip(packEntries));
-console.log(`[packager] Wrote ${packEntries.length} mcpack file(s) and ${addonName} to ${path.relative(root, outputDir)}`);
+console.log(`Wrote ${packEntries.length} mcpack file(s) and ${addonName} to ${path.relative(root, outputDir)}`);

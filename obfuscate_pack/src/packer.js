@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { ENTITY_PATH_PATTERN, LOOT_TABLE_PATTERN, MAP_FORMAT } from "./constants.js";
+import { ENTITY_PATH_PATTERN, LOOT_TABLE_PATTERN, SOUND_DEFINITION_PATTERN, TEXTURE_SET_PATTERN } from "./constants.js";
 import { collectClientSymbols, collectSymbols } from "./symbols.js";
 import { obfuscateJson, obfuscateJsonText, obfuscateLang, obfuscateTextureList, obfuscateTextureSet, replaceScriptString } from "./transformer.js";
 
@@ -43,7 +43,7 @@ export function createPacker({ root, args, map, symbols, paths, mapFile }) {
     paths.registerSoundPaths(pack, packName, map, symbols);
     for (const source of walk(pack)) {
       const rel = relativePath(pack, source);
-      if (isJson(source) && paths.shouldCollectSymbols(rel)) collectSymbols(source, symbols);
+      if (isJson(source) && (!paths.isFixedName(rel) || SOUND_DEFINITION_PATTERN.test(rel))) collectSymbols(source, symbols);
       if (isJson(source) && !paths.isFixedName(rel) && ENTITY_PATH_PATTERN.test(rel)) clientSources.push(source);
     }
   }
@@ -84,27 +84,29 @@ export function createPacker({ root, args, map, symbols, paths, mapFile }) {
   }
 
   function transformFile(source, target, rel, ext) {
-    if (ext === ".json" && paths.shouldTransformJson(rel)) {
-      try {
-        if (/\.texture_set\.json$/i.test(rel)) {
-          const textureRel = rel.replace(/\.texture_set\.json$/i, "");
-          fs.writeFileSync(target, obfuscateTextureSet(source, symbols, textureRel), "utf8");
-        } else {
-          const context = /^sounds\/music_definitions\.json$/i.test(rel) ? "music_definitions" : "";
-          fs.writeFileSync(target, obfuscateJson(source, symbols, context), "utf8");
-        }
-      } catch {
-        fs.copyFileSync(source, target);
-      }
-    } else if (rel === "textures/textures_list.json") {
-      fs.writeFileSync(target, obfuscateTextureList(source, symbols), "utf8");
-    } else if (ext === ".json" && args.unicode === true && !paths.isFixedName(rel)) {
-      fs.writeFileSync(target, obfuscateJsonText(source), "utf8");
-    } else if (ext === ".lang") {
-      fs.writeFileSync(target, obfuscateLang(source, symbols), "utf8");
-    } else if (ext === ".js") {
-      fs.writeFileSync(target, replaceScriptString(fs.readFileSync(source, "utf8"), symbols), "utf8");
-    } else fs.copyFileSync(source, target);
+    try {
+      if (SOUND_DEFINITION_PATTERN.test(rel)) {
+        const context = /^sounds\/music_definitions\.json$/i.test(rel) ? "music_definitions" : "sound_definitions";
+        fs.writeFileSync(target, obfuscateJson(source, symbols, context), "utf8");
+      } else if (TEXTURE_SET_PATTERN.test(rel)) {
+        const textureRel = rel.replace(TEXTURE_SET_PATTERN, "");
+        fs.writeFileSync(target, obfuscateTextureSet(source, symbols, textureRel), "utf8");
+      } else if (ext === ".json" && !paths.isFixedName(rel)) {
+        fs.writeFileSync(target, obfuscateJson(source, symbols), "utf8");
+      } else if (rel === "blocks.json") {
+        fs.writeFileSync(target, obfuscateJsonText(source), "utf8");
+      } else if (rel === "textures/textures_list.json") {
+        fs.writeFileSync(target, obfuscateTextureList(source, symbols), "utf8");
+      } else if (ext === ".json" && args.unicode === true && !paths.isFixedName(rel)) {
+        fs.writeFileSync(target, obfuscateJsonText(source), "utf8");
+      } else if (ext === ".lang") {
+        fs.writeFileSync(target, obfuscateLang(source, symbols), "utf8");
+      } else if (ext === ".js") {
+        fs.writeFileSync(target, replaceScriptString(fs.readFileSync(source, "utf8"), symbols), "utf8");
+      } else fs.copyFileSync(source, target);
+    } catch (error) {
+      fs.copyFileSync(source, target);
+    }
   }
 
   function obfuscatePack(pack, packName) {

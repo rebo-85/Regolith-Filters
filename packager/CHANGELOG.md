@@ -1,5 +1,11 @@
 # packager
 
+## 0.5.3
+
+### Patch Changes
+
+- minor fixes
+
 ## 0.5.2
 
 ### Patch Changes

@@ -52,7 +52,7 @@ root. Reference the repository root and select the filter by its directory name:
   },
   "obfuscate_pack": {
     "url": "github.com/rebo-85/Regolith-Filters",
-    "version": "obfuscate_pack@1.0.1"
+    "version": "obfuscate_pack@1.0.2"
   },
   "brarchive": {
     "url": "github.com/rebo-85/Regolith-Filters",
@@ -60,7 +60,7 @@ root. Reference the repository root and select the filter by its directory name:
   },
   "packager": {
     "url": "github.com/rebo-85/Regolith-Filters",
-    "version": "packager@0.5.2"
+    "version": "packager@0.5.3"
   }
 }
 ```
