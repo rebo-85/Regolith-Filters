@@ -9,6 +9,7 @@ export const FIXED_FILES = new Set([
   "textures/textures_list.json",
   "textures/item_texture.json",
   "textures/terrain_texture.json",
+  "textures/flipbook_textures.json",
   "texts/languages.json",
   "sounds/sound_definitions.json",
   "sounds/music_definitions.json"

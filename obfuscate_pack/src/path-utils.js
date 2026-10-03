@@ -3,7 +3,7 @@ import path from "node:path";
 import { makeKey } from "./symbols.js";
 import { FIXED_DIRECTORIES, FIXED_FILES, SOUND_DEFINITION_PATTERN, TEXTURE_SET_PATTERN } from "./constants.js";
 
-export function createPathMapper({ flattenFolders }) {
+export function createPathMapper({ flattenFolders = true, obfuscateFileNames = true }) {
   const isFixedName = (rel) => FIXED_FILES.has(rel.toLowerCase());
   const hashName = (value, ext = "") => `${makeKey(value)}${ext}`;
   const isFixedDirectory = (rel) => FIXED_DIRECTORIES.has(rel.toLowerCase());
@@ -29,6 +29,13 @@ export function createPathMapper({ flattenFolders }) {
       }
       return;
     }
+    if (!obfuscateFileNames) {
+      for (let idx = 1; idx < parts.length - 1; idx++) {
+        const sourceRel = parts.slice(0, idx + 1).join("/");
+        symbols.paths[sourceRel] = sourceRel;
+      }
+      return;
+    }
     const mapped = [parts[0]];
     map.__dirs ??= {};
     for (let idx = 1; idx < parts.length - 1; idx++) {
@@ -49,6 +56,11 @@ export function createPathMapper({ flattenFolders }) {
 
   function targetRelFor(rel, packName, map, symbols) {
     const key = `${packName.toLowerCase()}/${rel}`;
+    if (!obfuscateFileNames) {
+      const targetRel = path.posix.join(mappedParentFor(rel, symbols), path.posix.basename(rel));
+      symbols.paths[rel] = targetRel;
+      return targetRel;
+    }
     if (map[key]) {
       const name = flattenFolders ? path.posix.basename(map[key]) : map[key];
       const targetRel = map[key].includes("/") && !flattenFolders ? map[key] : path.posix.join(mappedParentFor(rel, symbols), name);
@@ -78,9 +90,11 @@ export function createPathMapper({ flattenFolders }) {
         const segment = parts[idx];
         const ext = idx === parts.length - 1 ? path.posix.extname(segment) : "";
         const key = `${packName.toLowerCase()}/${assetDir}/${parts.slice(1, idx + 1).join("/")}`;
-        const mappedName = map.__paths?.[key] ?? getName(key, ext, segment, parts, idx);
-        map.__paths ??= {};
-        map.__paths[key] = mappedName;
+        const mappedName = obfuscateFileNames ? (map.__paths?.[key] ?? getName(key, ext, segment, parts, idx)) : segment;
+        if (obfuscateFileNames) {
+          map.__paths ??= {};
+          map.__paths[key] = mappedName;
+        }
         mapped.push(mappedName);
       }
       const target = flattenFolders ? path.posix.join(parts[0], mapped[mapped.length - 1]) : mapped.join("/");

@@ -4,6 +4,30 @@ import crypto from "node:crypto";
 import { stripComments } from "./transformer.js";
 import { SYMBOL_FORMAT } from "./constants.js";
 
+const SYMBOL_GROUPS_BY_CATEGORY = {
+  entityIds: ["refs"],
+  blockIds: ["blockIds"],
+  itemIds: ["itemIds"],
+  tags: ["tags"],
+  components: ["aliases"],
+  properties: ["aliases"],
+  componentGroups: ["aliases"],
+  events: ["aliases"],
+  geometry: ["refs", "aliases"],
+  animations: ["refs", "aliases"],
+  animationControllers: ["refs"],
+  renderControllers: ["refs", "aliases"],
+  materials: ["aliases"],
+  textures: ["aliases"],
+  particles: ["refs"],
+  sounds: ["refs"],
+  animationStates: ["states"],
+  bones: ["bones"],
+  renderArrays: ["aliases"],
+  scriptVariables: ["vars"],
+  blockStates: ["aliases"]
+};
+
 export function makeKey(value) {
   const alphabet = "abcdefghijklmnopqrstuvwxyz";
   const digest = crypto.createHash("sha1").update(value).digest();
@@ -33,6 +57,19 @@ function collectScript(value, symbols) {
   if (value && typeof value === "object") return Object.values(value).forEach((item) => collectScript(item, symbols));
   if (typeof value !== "string") return;
   for (const match of value.matchAll(/\bv\.([A-Za-z_][\w]*)/g)) ensure(symbols, "vars", match[1]);
+}
+
+function collectCustomTags(value, symbols, key = "") {
+  if (Array.isArray(value)) {
+    if (key === "tags" || key === "family" || key.endsWith(":tags")) {
+      for (const tag of value)
+        if (typeof tag === "string" && tag.includes(":") && !tag.startsWith("minecraft:")) ensure(symbols, "tags", tag);
+    }
+    for (const item of value) collectCustomTags(item, symbols);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  for (const [childKey, childValue] of Object.entries(value)) collectCustomTags(childValue, symbols, childKey);
 }
 
 function collectEntityDefinitions(entity, symbols) {
@@ -73,8 +110,23 @@ function collectRenderDefinitions(controllers, symbols) {
 }
 
 function collectDefinitions(value, symbols, source) {
+  collectCustomTags(value, symbols);
+  if (source.toLowerCase() === "blocks.json") {
+    for (const name of Object.keys(value))
+      if (name.includes(":") && !name.startsWith("minecraft:")) ensure(symbols, "blockIds", name);
+  }
   const entity = value?.["minecraft:entity"];
   if (entity) collectEntityDefinitions(entity, symbols);
+  const blockIdentifier = value?.["minecraft:block"]?.description?.identifier;
+  if (typeof blockIdentifier === "string" && !blockIdentifier.startsWith("minecraft:"))
+    ensure(symbols, "blockIds", blockIdentifier);
+  const itemIdentifier = value?.["minecraft:item"]?.description?.identifier;
+  if (typeof itemIdentifier === "string" && !itemIdentifier.startsWith("minecraft:"))
+    ensure(symbols, "itemIds", itemIdentifier);
+  if (/^(?:terrain|item)_texture\.json$/i.test(source)) {
+    for (const name of Object.keys(value?.texture_data ?? {}))
+      if (!name.startsWith("minecraft:")) ensureAlias(symbols, name);
+  }
   for (const [key, fn] of [
     ["animation_controllers", collectControllerDefinitions],
     ["render_controllers", collectRenderDefinitions]
@@ -96,6 +148,11 @@ function collectDefinitions(value, symbols, source) {
   }
   for (const name of Object.keys(value?.["minecraft:block"]?.description?.states ?? {}))
     if (!name.startsWith("minecraft:")) ensureAlias(symbols, name);
+  const block = value?.["minecraft:block"];
+  for (const components of [block?.components, ...(block?.permutations ?? []).map((permutation) => permutation.components)]) {
+    for (const name of Object.keys(components ?? {}))
+      if (!name.startsWith("minecraft:")) ensureAlias(symbols, name);
+  }
   const particle = value?.particle_effect?.description?.identifier;
   if (typeof particle === "string" && !particle.startsWith("minecraft:")) ensure(symbols, "refs", particle);
 }
@@ -109,6 +166,9 @@ export function createSymbols(map) {
     symbols.states = {};
     symbols.bones = {};
     symbols.paths = {};
+    symbols.blockIds = {};
+    symbols.itemIds = {};
+    symbols.tags = {};
     symbols.keyFormat = SYMBOL_FORMAT;
   }
   symbols.aliases ??= symbols.keys ?? {};
@@ -119,10 +179,40 @@ export function createSymbols(map) {
   symbols.states ??= {};
   symbols.bones ??= {};
   symbols.paths ??= {};
+  symbols.blockIds ??= {};
+  symbols.itemIds ??= {};
+  symbols.tags ??= {};
   delete symbols.keys;
-  symbols.used = new Set(Object.values(symbols.aliases).concat(Object.values(symbols.refs), Object.values(symbols.vars)));
+  symbols.used = new Set(Object.values(symbols.aliases).concat(
+    Object.values(symbols.refs),
+    Object.values(symbols.vars),
+    Object.values(symbols.blockIds),
+    Object.values(symbols.itemIds),
+    Object.values(symbols.tags)
+  ));
   map.__symbols = symbols;
   return symbols;
+}
+
+export function applySymbolSettings(symbols, settings) {
+  const obfuscateCategories = settings.obfuscate ?? {};
+  if (!obfuscateCategories || typeof obfuscateCategories !== "object" || Array.isArray(obfuscateCategories))
+    throw new TypeError("obfuscate must be an object of category booleans");
+  const excludedSymbols = settings.exclude ?? {};
+  if (!excludedSymbols || typeof excludedSymbols !== "object" || Array.isArray(excludedSymbols))
+    throw new TypeError("exclude must be an object of category arrays");
+  for (const [category, groups] of Object.entries(SYMBOL_GROUPS_BY_CATEGORY)) {
+    const legacyCategory = category === "blockIds" ? "blocks" : "";
+    const enabled = obfuscateCategories[category] ?? obfuscateCategories[legacyCategory] ?? true;
+    if (typeof enabled !== "boolean") throw new TypeError(`obfuscate.${category} must be a boolean`);
+    const excluded = excludedSymbols[category] ?? excludedSymbols[legacyCategory] ?? [];
+    if (!Array.isArray(excluded) || excluded.some((value) => typeof value !== "string"))
+      throw new TypeError(`exclude.${category} must be an array of strings`);
+    if (enabled && excluded.length === 0) continue;
+    for (const group of groups)
+      for (const value of Object.keys(symbols[group]))
+        if (!enabled || excluded.includes(value)) delete symbols[group][value];
+  }
 }
 
 export function collectSymbols(source, symbols) {

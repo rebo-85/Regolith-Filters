@@ -10,7 +10,7 @@ const root = process.env.ROOT_DIR;
 if (!root) throw new Error("ROOT_DIR environment variable is required");
 
 const args = process.argv[2] ? JSON.parse(process.argv[2]) : {};
-setUnicodeEnabled(args.unicode === true);
+setUnicodeEnabled(args.unicode !== false);
 
 const mapDir = path.resolve(root, args.mapDir ?? "packs/data/obfuscate_pack");
 const mapFileName = args.mapFile ?? (args.profile ? `${args.profile}.map.json` : "map.json");
@@ -29,7 +29,10 @@ if (map.__format !== MAP_FORMAT) {
 }
 
 const symbols = createSymbols(map);
-const paths = createPathMapper({ flattenFolders: args.flattenFolders === true });
+const paths = createPathMapper({
+  flattenFolders: args.flattenFolders !== false,
+  obfuscateFileNames: args.obfuscateFileNames !== false
+});
 const flattened = createPacker({ root, args, map, symbols, paths, mapFile }).run();
 
 if (flattened) console.log("Folders flattened, but client might need a restart for all changes to take effect.");

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-let unicodeEnabled = false;
+let unicodeEnabled = true;
 
 export function setUnicodeEnabled(enabled) {
   unicodeEnabled = enabled === true;
@@ -97,21 +97,21 @@ function escapePattern(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function replaceExactTokens(value, entries) {
+function replaceExactTokens(value, entries, { allowDotPrefix = false } = {}) {
   let result = value;
   for (const [original, replacement] of entries) {
     if (!original) continue;
     const pattern = new RegExp(`(^|[^A-Za-z0-9_:/-])${escapePattern(original)}(?=$|[^A-Za-z0-9_:/-])`, "g");
-    result = result.replace(pattern, (match, prefix) => (prefix === "." ? match : `${prefix}${replacement}`));
+    result = result.replace(pattern, (match, prefix) => (prefix === "." && !allowDotPrefix ? match : `${prefix}${replacement}`));
   }
   return result;
 }
 
-function replaceTokenSet(value, entries) {
+function replaceTokenSet(value, entries, { allowDotPrefix = false } = {}) {
   if (!entries.length) return value;
   const replacements = new Map(entries);
   const pattern = new RegExp(`(^|[^A-Za-z0-9_:/-])(${entries.map(([original]) => escapePattern(original)).join("|")})(?=$|[^A-Za-z0-9_:/-])`, "g");
-  return value.replace(pattern, (match, prefix, original) => (prefix === "." ? match : `${prefix}${replacements.get(original)}`));
+  return value.replace(pattern, (match, prefix, original) => (prefix === "." && !allowDotPrefix ? match : `${prefix}${replacements.get(original)}`));
 }
 
 function refName(value, name) {
@@ -129,20 +129,25 @@ function aliasName(value, name) {
   return namespaced ? `${namespaced[1]}:${name}` : name;
 }
 
-export function replaceString(value, symbols) {
+export function replaceString(value, symbols, { skipAssetIds = false, allowDotPrefix = false } = {}) {
   let result = value;
   for (const [original, replacement] of Object.entries(symbols.paths).sort(([a], [b]) => b.length - a.length))
-    result = replaceExactTokens(result, [[original, replacement]]);
+    result = replaceExactTokens(result, [[original, replacement]], { allowDotPrefix });
+  for (const group of [skipAssetIds ? null : symbols.blockIds, skipAssetIds ? null : symbols.itemIds, symbols.tags]) {
+    if (!group) continue;
+    for (const [original, replacement] of Object.entries(group ?? {}).sort(([a], [b]) => b.length - a.length))
+      result = replaceExactTokens(result, [[original, refName(original, replacement)]], { allowDotPrefix });
+  }
   for (const [original, replacement] of Object.entries(symbols.refs).sort(([a], [b]) => b.length - a.length))
-    result = replaceExactTokens(result, [[original, refName(original, replacement)]]);
+    result = replaceExactTokens(result, [[original, refName(original, replacement)]], { allowDotPrefix });
   const aliases = Object.entries(symbols.aliases)
     .sort(([a], [b]) => b.length - a.length)
     .map(([original, replacement]) => [original, aliasName(original, replacement)]);
-  result = replaceTokenSet(result, aliases);
+  result = replaceTokenSet(result, aliases, { allowDotPrefix });
   for (const [original, replacement] of aliases) {
     if (!original.includes(".")) {
       for (const prefix of ["texture.", "Geometry.", "Material.", "Array."])
-        result = replaceExactTokens(result, [[`${prefix}${original}`, `${prefix}${aliasName(original, replacement)}`]]);
+        result = replaceExactTokens(result, [[`${prefix}${original}`, `${prefix}${aliasName(original, replacement)}`]], { allowDotPrefix });
     }
   }
   return result.replace(/\bv\.([A-Za-z_][\w]*)/g, (_, name) => `v.${symbols.vars[name] ?? name}`);
@@ -152,14 +157,33 @@ export function replaceScriptString(value, symbols) {
   let result = value;
   for (const [original, replacement] of Object.entries(symbols.paths).sort(([a], [b]) => b.length - a.length))
     result = replaceExactTokens(result, [[original, replacement]]);
+  for (const group of [symbols.blockIds, symbols.itemIds, symbols.tags]) {
+    for (const [original, replacement] of Object.entries(group ?? {}).sort(([a], [b]) => b.length - a.length))
+      result = replaceExactTokens(result, [[original, refName(original, replacement)]]);
+  }
   for (const [original, replacement] of Object.entries(symbols.refs).sort(([a], [b]) => b.length - a.length))
     result = replaceExactTokens(result, [[original, refName(original, replacement)]]);
-  return replaceTokenSet(
+  const aliases = Object.entries(symbols.aliases)
+    .sort(([a], [b]) => b.length - a.length)
+    .map(([original, replacement]) => [original, aliasName(original, replacement)]);
+  result = replaceTokenSet(
     result,
-    Object.entries(symbols.aliases)
-      .sort(([a], [b]) => b.length - a.length)
-      .map(([original, replacement]) => [original, aliasName(original, replacement)])
+    aliases
   );
+  const templateAliases = new Map();
+  const ambiguousSuffixes = new Set();
+  for (const [original, replacement] of aliases) {
+    const separator = original.indexOf(":");
+    if (separator < 0) continue;
+    const suffix = original.slice(separator + 1);
+    const replacementSuffix = replacement.slice(replacement.indexOf(":") + 1);
+    if (templateAliases.has(suffix) && templateAliases.get(suffix) !== replacementSuffix) ambiguousSuffixes.add(suffix);
+    else templateAliases.set(suffix, replacementSuffix);
+  }
+  return result.replace(/\$\{[^{}]+\}:([A-Za-z_][\w.-]*)/g, (match, suffix) => {
+    const replacement = templateAliases.get(suffix);
+    return replacement && !ambiguousSuffixes.has(suffix) ? match.slice(0, match.lastIndexOf(":") + 1) + replacement : match;
+  });
 }
 
 function transform(value, symbols, context = "") {
@@ -167,6 +191,13 @@ function transform(value, symbols, context = "") {
   if (typeof value === "string") {
     if (context === "render_geometry" && value.startsWith("Geometry.")) return `Geometry.${replaceString(value.slice("Geometry.".length), symbols)}`;
     if (context === "render_textures" && value.startsWith("Texture.")) return `Texture.${replaceString(value.slice("Texture.".length), symbols)}`;
+    if (context === "block_id") return symbols.blockIds[value] ? refName(value, symbols.blockIds[value]) : value;
+    if (context === "item_id") return symbols.itemIds[value] ? refName(value, symbols.itemIds[value]) : value;
+    if (context === "texture") return replaceString(value, symbols, { skipAssetIds: true });
+    if (context === "texture_id") {
+      const replacement = symbols.aliases[value];
+      return replacement ? aliasName(value, replacement) : replaceString(value, symbols, { skipAssetIds: true });
+    }
     if (context === "state_value") return symbols.states[value] ?? value;
     if (context === "bone_name" || context === "bone_parent") return symbols.bones[value] ?? value;
     return replaceString(value, symbols);
@@ -195,6 +226,22 @@ function transform(value, symbols, context = "") {
       else if (context === "bones" && key === "parent") childContext = "bone_parent";
       else if (context === "transition" && symbols.states[key]) nextKey = symbols.states[key];
       else if (symbols.aliases[key]) nextKey = aliasName(key, symbols.aliases[key]);
+      if (key === "minecraft:block") childContext = "block_root";
+      if (key === "minecraft:item") childContext = "item_root";
+      if ((context === "block_root" || context === "item_root") && key === "description")
+        childContext = `${context}_description`;
+      if ((context === "block_description" || context === "item_description") && key === "identifier")
+        childContext = context === "block_description" ? "block_id" : "item_id";
+      if (context === "block_root" && key === "components") childContext = "block_components";
+      if (context === "block_root" && key === "permutations") childContext = "block_permutations";
+      if ((context === "block_permutations" || context === "block_permutation") && key === "components")
+        childContext = "block_components";
+      if (context === "block_components" && key === "minecraft:material_instances")
+        childContext = "material_instances";
+      if (context === "material_instances") childContext = "material_instance";
+      if (context === "material_instance" && key === "texture") childContext = "texture";
+      if (key === "atlas_tile") childContext = "texture_id";
+      if (context === "block_permutations") childContext = "block_permutation";
       if (context === "controller" && key === "initial_state") childContext = "state_value";
       if (context === "state" && key === "transitions") childContext = "transition";
       if (context === "render_controller" && key === "geometry") childContext = "render_geometry";
@@ -219,6 +266,15 @@ export function obfuscateJsonText(source) {
   return unicodeJsonText(fs.readFileSync(source, "utf8"));
 }
 
+export function obfuscateBlockJson(source, symbols) {
+  const value = JSON.parse(stripComments(fs.readFileSync(source, "utf8")));
+  const result = Object.fromEntries(Object.entries(value).map(([key, item]) => {
+    const replacement = symbols.blockIds[key];
+    return [replacement ? refName(key, replacement) : key, item];
+  }));
+  return serialize(result, 2);
+}
+
 export function obfuscateLang(source, symbols) {
   return fs
     .readFileSync(source, "utf8")
@@ -226,7 +282,7 @@ export function obfuscateLang(source, symbols) {
     .map((line) => {
       if (!line || line.startsWith("#") || !line.includes("=")) return line;
       const separator = line.indexOf("=");
-      return `${replaceString(line.slice(0, separator), symbols)}${line.slice(separator)}`;
+      return `${replaceString(line.slice(0, separator), symbols, { allowDotPrefix: true })}${line.slice(separator)}`;
     })
     .join("");
 }
@@ -237,6 +293,29 @@ export function obfuscateTextureList(source, symbols) {
     values.map((value) => symbols.paths[value] ?? value),
     "\t"
   );
+}
+
+export function replacePathsString(value, symbols) {
+  return Object.entries(symbols.paths)
+    .sort(([a], [b]) => b.length - a.length)
+    .reduce((result, [original, replacement]) => replaceExactTokens(result, [[original, replacement]]), value);
+}
+
+export function obfuscatePathsJson(source, symbols) {
+  const text = fs.readFileSync(source, "utf8");
+  if (Object.entries(symbols.paths).every(([original, replacement]) => original === replacement)) return text;
+  const rewritePaths = (value) => {
+    if (Array.isArray(value)) return value.map(rewritePaths);
+    if (value && typeof value === "object")
+      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, rewritePaths(item)]));
+    return typeof value === "string" ? replacePathsString(value, symbols) : value;
+  };
+  const value = JSON.parse(stripComments(text));
+  return JSON.stringify(rewritePaths(value), null, 2);
+}
+
+export function obfuscateTextureJson(source, symbols) {
+  return obfuscateJson(source, symbols);
 }
 
 export function obfuscateTextureSet(source, symbols, textureRel) {

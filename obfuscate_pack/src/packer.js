@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { ENTITY_PATH_PATTERN, LOOT_TABLE_PATTERN, SOUND_DEFINITION_PATTERN, TEXTURE_SET_PATTERN } from "./constants.js";
-import { collectClientSymbols, collectSymbols } from "./symbols.js";
-import { obfuscateJson, obfuscateJsonText, obfuscateLang, obfuscateTextureList, obfuscateTextureSet, replaceScriptString } from "./transformer.js";
+import { applySymbolSettings, collectClientSymbols, collectSymbols } from "./symbols.js";
+import { obfuscateBlockJson, obfuscateJson, obfuscateJsonText, obfuscateLang, obfuscatePathsJson, obfuscateTextureJson, obfuscateTextureList, obfuscateTextureSet, replacePathsString, replaceScriptString } from "./transformer.js";
 
 function walk(dir, files = []) {
   if (!fs.existsSync(dir)) return files;
@@ -43,7 +43,13 @@ export function createPacker({ root, args, map, symbols, paths, mapFile }) {
     paths.registerSoundPaths(pack, packName, map, symbols);
     for (const source of walk(pack)) {
       const rel = relativePath(pack, source);
-      if (isJson(source) && (!paths.isFixedName(rel) || SOUND_DEFINITION_PATTERN.test(rel))) collectSymbols(source, symbols);
+      if (isJson(source) && (
+        !paths.isFixedName(rel)
+        || SOUND_DEFINITION_PATTERN.test(rel)
+        || rel === "blocks.json"
+        || rel === "textures/flipbook_textures.json"
+        || /^textures\/(?:terrain|item)_texture\.json$/i.test(rel)
+      )) collectSymbols(source, symbols);
       if (isJson(source) && !paths.isFixedName(rel) && ENTITY_PATH_PATTERN.test(rel)) clientSources.push(source);
     }
   }
@@ -67,10 +73,11 @@ export function createPacker({ root, args, map, symbols, paths, mapFile }) {
         targetRel = path.posix.join(paths.mappedParentFor(rel, symbols), name);
       }
       symbols.paths[rel] = targetRel;
-      map[key] = path.posix.basename(targetRel);
+      if (args.obfuscateFileNames !== false) map[key] = path.posix.basename(targetRel);
     } else if (ext === ".json" && !paths.isFixedName(rel) && !LOOT_TABLE_PATTERN.test(rel)) {
-      let name = map[key];
-      if (!name) {
+      let name = path.posix.basename(rel);
+      if (args.obfuscateFileNames !== false) name = map[key];
+      if (args.obfuscateFileNames !== false && !name) {
         name = paths.hashName(key, ext);
         const used = new Set(Object.values(map));
         let suffix = 1;
@@ -85,16 +92,31 @@ export function createPacker({ root, args, map, symbols, paths, mapFile }) {
 
   function transformFile(source, target, rel, ext) {
     try {
+      if (args.obfuscateFileContents === false) {
+        if (rel === "textures/flipbook_textures.json") {
+          fs.writeFileSync(target, obfuscateJson(source, symbols), "utf8");
+        } else if (TEXTURE_SET_PATTERN.test(rel)) {
+          const textureRel = rel.replace(TEXTURE_SET_PATTERN, "");
+          fs.writeFileSync(target, obfuscateTextureSet(source, symbols, textureRel), "utf8");
+        } else if (ext === ".json") fs.writeFileSync(target, obfuscatePathsJson(source, symbols), "utf8");
+        else if (ext === ".js") fs.writeFileSync(target, replacePathsString(fs.readFileSync(source, "utf8"), symbols), "utf8");
+        else fs.copyFileSync(source, target);
+        return;
+      }
       if (SOUND_DEFINITION_PATTERN.test(rel)) {
         const context = /^sounds\/music_definitions\.json$/i.test(rel) ? "music_definitions" : "sound_definitions";
         fs.writeFileSync(target, obfuscateJson(source, symbols, context), "utf8");
       } else if (TEXTURE_SET_PATTERN.test(rel)) {
         const textureRel = rel.replace(TEXTURE_SET_PATTERN, "");
         fs.writeFileSync(target, obfuscateTextureSet(source, symbols, textureRel), "utf8");
+      } else if (rel === "textures/terrain_texture.json" || rel === "textures/item_texture.json") {
+        fs.writeFileSync(target, obfuscateTextureJson(source, symbols), "utf8");
+      } else if (rel === "textures/flipbook_textures.json") {
+        fs.writeFileSync(target, obfuscateJson(source, symbols), "utf8");
       } else if (ext === ".json" && !paths.isFixedName(rel)) {
         fs.writeFileSync(target, obfuscateJson(source, symbols), "utf8");
       } else if (rel === "blocks.json") {
-        fs.writeFileSync(target, obfuscateJsonText(source), "utf8");
+        fs.writeFileSync(target, obfuscateBlockJson(source, symbols), "utf8");
       } else if (rel === "textures/textures_list.json") {
         fs.writeFileSync(target, obfuscateTextureList(source, symbols), "utf8");
       } else if (ext === ".json" && args.unicode === true && !paths.isFixedName(rel)) {
@@ -120,16 +142,24 @@ export function createPacker({ root, args, map, symbols, paths, mapFile }) {
       transformFile(source, target, rel, ext);
     }
     fs.rmSync(pack, { recursive: true, force: true });
-    fs.renameSync(stage, pack);
+    try {
+      fs.renameSync(stage, pack);
+    } catch (error) {
+      if (!["EPERM", "EACCES", "EXDEV"].includes(error.code)) throw error;
+      fs.cpSync(stage, pack, { recursive: true, force: false, errorOnExist: true });
+      fs.rmSync(stage, { recursive: true, force: true });
+    }
   }
 
   function run() {
+    symbols.paths = {};
     const clientSources = [];
     for (const name of ["BP", "RP"]) {
       const pack = path.join(tmpDir, name);
       if (fs.existsSync(pack)) collectPackSymbols(pack, name, clientSources);
     }
     for (const source of clientSources) collectClientSymbols(source, symbols);
+    applySymbolSettings(symbols, args);
     for (const name of ["BP", "RP"]) {
       const pack = path.join(tmpDir, name);
       if (fs.existsSync(pack)) obfuscatePack(pack, name);
@@ -138,7 +168,7 @@ export function createPacker({ root, args, map, symbols, paths, mapFile }) {
     fs.mkdirSync(mapDir, { recursive: true });
 
     fs.writeFileSync(targetMapFile, JSON.stringify(map, null, 2), "utf8");
-    return args.flattenFolders === true;
+    return args.flattenFolders !== false;
   }
 
   return { run };
