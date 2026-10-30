@@ -214,7 +214,7 @@ function transform(value, symbols, context = "") {
       return replacement ? aliasName(value, replacement) : replaceString(value, symbols, { skipAssetIds: true });
     }
     if (context === "state_value") return symbols.states[value] ?? value;
-    if (context === "bone_name" || context === "bone_parent") return symbols.bones[value] ?? value;
+    if (context === "bone_name" || context === "bone_parent") return symbols.bones[value.toLowerCase()] ?? value;
     return replaceString(value, symbols);
   }
   if (!value || typeof value !== "object") return value;
@@ -235,8 +235,8 @@ function transform(value, symbols, context = "") {
         nextKey = refName(key, symbols.refs[key]);
       } else if (context === "array_definition" && key.startsWith("array.")) {
         nextKey = `array.${symbols.aliases[key.slice("array.".length)] ?? key.slice("array.".length)}`;
-      } else if ((context === "animation_bones" || context === "bone_visibility") && symbols.bones[key]) {
-        nextKey = symbols.bones[key];
+      } else if ((context === "animation_bones" || context === "bone_visibility") && symbols.bones[key.toLowerCase()]) {
+        nextKey = symbols.bones[key.toLowerCase()];
       } else if (context === "bones" && key === "name") childContext = "bone_name";
       else if (context === "bones" && key === "parent") childContext = "bone_parent";
       else if (context === "transition" && symbols.states[key]) nextKey = symbols.states[key];

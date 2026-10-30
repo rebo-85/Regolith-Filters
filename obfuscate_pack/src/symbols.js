@@ -62,8 +62,7 @@ function collectScript(value, symbols) {
 function collectCustomTags(value, symbols, key = "") {
   if (Array.isArray(value)) {
     if (key === "tags" || key === "family" || key.endsWith(":tags")) {
-      for (const tag of value)
-        if (typeof tag === "string" && tag.includes(":") && !tag.startsWith("minecraft:")) ensure(symbols, "tags", tag);
+      for (const tag of value) if (typeof tag === "string" && tag.includes(":") && !tag.startsWith("minecraft:")) ensure(symbols, "tags", tag);
     }
     for (const item of value) collectCustomTags(item, symbols);
     return;
@@ -112,20 +111,16 @@ function collectRenderDefinitions(controllers, symbols) {
 function collectDefinitions(value, symbols, source) {
   collectCustomTags(value, symbols);
   if (source.toLowerCase() === "blocks.json") {
-    for (const name of Object.keys(value))
-      if (name.includes(":") && !name.startsWith("minecraft:")) ensure(symbols, "blockIds", name);
+    for (const name of Object.keys(value)) if (name.includes(":") && !name.startsWith("minecraft:")) ensure(symbols, "blockIds", name);
   }
   const entity = value?.["minecraft:entity"];
   if (entity) collectEntityDefinitions(entity, symbols);
   const blockIdentifier = value?.["minecraft:block"]?.description?.identifier;
-  if (typeof blockIdentifier === "string" && !blockIdentifier.startsWith("minecraft:"))
-    ensure(symbols, "blockIds", blockIdentifier);
+  if (typeof blockIdentifier === "string" && !blockIdentifier.startsWith("minecraft:")) ensure(symbols, "blockIds", blockIdentifier);
   const itemIdentifier = value?.["minecraft:item"]?.description?.identifier;
-  if (typeof itemIdentifier === "string" && !itemIdentifier.startsWith("minecraft:"))
-    ensure(symbols, "itemIds", itemIdentifier);
+  if (typeof itemIdentifier === "string" && !itemIdentifier.startsWith("minecraft:")) ensure(symbols, "itemIds", itemIdentifier);
   if (/^(?:terrain|item)_texture\.json$/i.test(source)) {
-    for (const name of Object.keys(value?.texture_data ?? {}))
-      if (!name.startsWith("minecraft:")) ensureAlias(symbols, name);
+    for (const name of Object.keys(value?.texture_data ?? {})) if (!name.startsWith("minecraft:")) ensureAlias(symbols, name);
   }
   for (const [key, fn] of [
     ["animation_controllers", collectControllerDefinitions],
@@ -135,7 +130,7 @@ function collectDefinitions(value, symbols, source) {
   for (const name of Object.keys(value?.animations ?? {})) if (name.startsWith("animation.")) ensure(symbols, "refs", name);
   for (const geometry of value?.["minecraft:geometry"] ?? []) {
     if (typeof geometry.description?.identifier === "string") ensure(symbols, "refs", geometry.description.identifier);
-    for (const bone of geometry.bones ?? []) if (typeof bone.name === "string") ensure(symbols, "bones", bone.name);
+    for (const bone of geometry.bones ?? []) if (typeof bone.name === "string") ensure(symbols, "bones", bone.name.toLowerCase());
   }
   if (value?.sound_definitions)
     for (const name of Object.keys(value.sound_definitions)) if (!name.startsWith("minecraft:") && name.includes(":")) ensure(symbols, "refs", name);
@@ -144,14 +139,14 @@ function collectDefinitions(value, symbols, source) {
   const culling = value?.["minecraft:block_culling_rules"];
   if (culling) {
     if (typeof culling.description?.identifier === "string") ensure(symbols, "refs", culling.description.identifier);
-    for (const rule of culling.rules ?? []) if (typeof rule?.geometry_part?.bone === "string") ensure(symbols, "bones", rule.geometry_part.bone);
+    for (const rule of culling.rules ?? [])
+      if (typeof rule?.geometry_part?.bone === "string") ensure(symbols, "bones", rule.geometry_part.bone.toLowerCase());
   }
   for (const name of Object.keys(value?.["minecraft:block"]?.description?.states ?? {}))
     if (!name.startsWith("minecraft:")) ensureAlias(symbols, name);
   const block = value?.["minecraft:block"];
   for (const components of [block?.components, ...(block?.permutations ?? []).map((permutation) => permutation.components)]) {
-    for (const name of Object.keys(components ?? {}))
-      if (!name.startsWith("minecraft:")) ensureAlias(symbols, name);
+    for (const name of Object.keys(components ?? {})) if (!name.startsWith("minecraft:")) ensureAlias(symbols, name);
   }
   const particle = value?.particle_effect?.description?.identifier;
   if (typeof particle === "string" && !particle.startsWith("minecraft:")) ensure(symbols, "refs", particle);
@@ -183,13 +178,15 @@ export function createSymbols(map) {
   symbols.itemIds ??= {};
   symbols.tags ??= {};
   delete symbols.keys;
-  symbols.used = new Set(Object.values(symbols.aliases).concat(
-    Object.values(symbols.refs),
-    Object.values(symbols.vars),
-    Object.values(symbols.blockIds),
-    Object.values(symbols.itemIds),
-    Object.values(symbols.tags)
-  ));
+  symbols.used = new Set(
+    Object.values(symbols.aliases).concat(
+      Object.values(symbols.refs),
+      Object.values(symbols.vars),
+      Object.values(symbols.blockIds),
+      Object.values(symbols.itemIds),
+      Object.values(symbols.tags)
+    )
+  );
   map.__symbols = symbols;
   return symbols;
 }
@@ -211,7 +208,8 @@ export function applySymbolSettings(symbols, settings) {
     if (enabled && excluded.length === 0) continue;
     for (const group of groups)
       for (const value of Object.keys(symbols[group]))
-        if (!enabled || excluded.includes(value)) delete symbols[group][value];
+        if (!enabled || excluded.includes(value) || (group === "bones" && excluded.some((name) => name.toLowerCase() === value)))
+          delete symbols[group][value];
   }
 }
 

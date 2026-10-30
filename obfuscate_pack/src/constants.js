@@ -1,5 +1,5 @@
 export const MAP_FORMAT = "letters6-v5";
-export const SYMBOL_FORMAT = "letters6-v5";
+export const SYMBOL_FORMAT = "letters6-v6";
 
 export const FIXED_DIRECTORIES = new Set(["models", "models/blocks", "models/entity"]);
 
