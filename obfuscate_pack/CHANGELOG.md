@@ -1,5 +1,11 @@
 # obfuscate_pack
 
+## 1.1.1
+
+### Patch Changes
+
+- fix issue with float entity property
+
 ## 1.1.0
 
 ### Minor Changes

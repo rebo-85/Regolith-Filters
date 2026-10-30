@@ -3,6 +3,23 @@ import path from "node:path";
 
 let unicodeEnabled = true;
 
+// JSON.parse/stringify turns 0.0 into 0, which Bedrock rejects for float properties.
+// Decimal literals are wrapped in marker strings before parsing and unwrapped after stringifying.
+const FLOAT_MARK = "@@float@@";
+const FLOAT_RESTORE = new RegExp(`"${FLOAT_MARK}(-?\\d+\\.\\d+(?:[eE][+-]?\\d+)?)"`, "g");
+
+function protectFloats(text) {
+  return text.replace(/("(?:\\.|[^"\\])*")|(-?\d+\.\d+(?:[eE][+-]?\d+)?)/g, (match, str, num) => (str ? str : `"${FLOAT_MARK}${num}"`));
+}
+
+function restoreFloats(text) {
+  return text.replace(FLOAT_RESTORE, "$1");
+}
+
+function parseJson(text) {
+  return JSON.parse(protectFloats(stripComments(text)));
+}
+
 export function setUnicodeEnabled(enabled) {
   unicodeEnabled = enabled === true;
 }
@@ -46,7 +63,7 @@ export function unicodeJsonText(text) {
 }
 
 function serialize(value, indent) {
-  return unicodeJsonText(JSON.stringify(value, null, indent));
+  return unicodeJsonText(restoreFloats(JSON.stringify(value, null, indent)));
 }
 
 export function stripComments(text) {
@@ -166,10 +183,7 @@ export function replaceScriptString(value, symbols) {
   const aliases = Object.entries(symbols.aliases)
     .sort(([a], [b]) => b.length - a.length)
     .map(([original, replacement]) => [original, aliasName(original, replacement)]);
-  result = replaceTokenSet(
-    result,
-    aliases
-  );
+  result = replaceTokenSet(result, aliases);
   const templateAliases = new Map();
   const ambiguousSuffixes = new Set();
   for (const [original, replacement] of aliases) {
@@ -189,6 +203,7 @@ export function replaceScriptString(value, symbols) {
 function transform(value, symbols, context = "") {
   if (Array.isArray(value)) return value.map((item) => transform(item, symbols, context));
   if (typeof value === "string") {
+    if (value.startsWith(FLOAT_MARK)) return value;
     if (context === "render_geometry" && value.startsWith("Geometry.")) return `Geometry.${replaceString(value.slice("Geometry.".length), symbols)}`;
     if (context === "render_textures" && value.startsWith("Texture.")) return `Texture.${replaceString(value.slice("Texture.".length), symbols)}`;
     if (context === "block_id") return symbols.blockIds[value] ? refName(value, symbols.blockIds[value]) : value;
@@ -228,16 +243,13 @@ function transform(value, symbols, context = "") {
       else if (symbols.aliases[key]) nextKey = aliasName(key, symbols.aliases[key]);
       if (key === "minecraft:block") childContext = "block_root";
       if (key === "minecraft:item") childContext = "item_root";
-      if ((context === "block_root" || context === "item_root") && key === "description")
-        childContext = `${context}_description`;
+      if ((context === "block_root" || context === "item_root") && key === "description") childContext = `${context}_description`;
       if ((context === "block_description" || context === "item_description") && key === "identifier")
         childContext = context === "block_description" ? "block_id" : "item_id";
       if (context === "block_root" && key === "components") childContext = "block_components";
       if (context === "block_root" && key === "permutations") childContext = "block_permutations";
-      if ((context === "block_permutations" || context === "block_permutation") && key === "components")
-        childContext = "block_components";
-      if (context === "block_components" && key === "minecraft:material_instances")
-        childContext = "material_instances";
+      if ((context === "block_permutations" || context === "block_permutation") && key === "components") childContext = "block_components";
+      if (context === "block_components" && key === "minecraft:material_instances") childContext = "material_instances";
       if (context === "material_instances") childContext = "material_instance";
       if (context === "material_instance" && key === "texture") childContext = "texture";
       if (key === "atlas_tile") childContext = "texture_id";
@@ -259,7 +271,7 @@ function transform(value, symbols, context = "") {
 }
 
 export function obfuscateJson(source, symbols, context = "") {
-  return serialize(transform(JSON.parse(stripComments(fs.readFileSync(source, "utf8"))), symbols, context));
+  return serialize(transform(parseJson(fs.readFileSync(source, "utf8")), symbols, context));
 }
 
 export function obfuscateJsonText(source) {
@@ -267,11 +279,13 @@ export function obfuscateJsonText(source) {
 }
 
 export function obfuscateBlockJson(source, symbols) {
-  const value = JSON.parse(stripComments(fs.readFileSync(source, "utf8")));
-  const result = Object.fromEntries(Object.entries(value).map(([key, item]) => {
-    const replacement = symbols.blockIds[key];
-    return [replacement ? refName(key, replacement) : key, item];
-  }));
+  const value = parseJson(fs.readFileSync(source, "utf8"));
+  const result = Object.fromEntries(
+    Object.entries(value).map(([key, item]) => {
+      const replacement = symbols.blockIds[key];
+      return [replacement ? refName(key, replacement) : key, item];
+    })
+  );
   return serialize(result, 2);
 }
 
@@ -306,12 +320,11 @@ export function obfuscatePathsJson(source, symbols) {
   if (Object.entries(symbols.paths).every(([original, replacement]) => original === replacement)) return text;
   const rewritePaths = (value) => {
     if (Array.isArray(value)) return value.map(rewritePaths);
-    if (value && typeof value === "object")
-      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, rewritePaths(item)]));
-    return typeof value === "string" ? replacePathsString(value, symbols) : value;
+    if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, rewritePaths(item)]));
+    return typeof value === "string" ? (value.startsWith(FLOAT_MARK) ? value : replacePathsString(value, symbols)) : value;
   };
-  const value = JSON.parse(stripComments(text));
-  return JSON.stringify(rewritePaths(value), null, 2);
+  const value = parseJson(text);
+  return restoreFloats(JSON.stringify(rewritePaths(value), null, 2));
 }
 
 export function obfuscateTextureJson(source, symbols) {
@@ -319,7 +332,7 @@ export function obfuscateTextureJson(source, symbols) {
 }
 
 export function obfuscateTextureSet(source, symbols, textureRel) {
-  const value = JSON.parse(stripComments(fs.readFileSync(source, "utf8")));
+  const value = parseJson(fs.readFileSync(source, "utf8"));
   const textureSet = value?.["minecraft:texture_set"];
   const sourceDir = path.posix.dirname(textureRel);
   if (!textureSet) return serialize(value);
