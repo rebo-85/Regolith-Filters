@@ -1,5 +1,11 @@
 # brarchive
 
+## 0.6.0
+
+### Minor Changes
+
+- fix v1.26.60 format issue
+
 ## 0.5.5
 
 ### Patch Changes
