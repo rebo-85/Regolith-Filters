@@ -45,13 +45,6 @@ function stripComments(text) {
   });
 }
 
-// Bedrock tolerates comments and trailing commas in source JSON; JSON.parse does not.
-function parseLooseJson(text) {
-  const noComments = stripComments(text.replace(/^\uFEFF/, ""));
-  const noTrailingCommas = noComments.replace(/("(?:\\.|[^"\\])*")|,(\s*[}\]])/g, (m, str, close) => (str !== undefined ? str : close));
-  return JSON.parse(noTrailingCommas);
-}
-
 function validateManifest(pack) {
   const manifestPath = path.join(pack, "manifest.json");
   const manifest = JSON.parse(stripComments(fs.readFileSync(manifestPath, "utf8")));
@@ -62,11 +55,18 @@ function validateManifest(pack) {
 
 const isStub = (file) => stubbedExt.has(path.extname(file).toLowerCase());
 
+function minifyJsonText(text) {
+  const clean = stripComments(text.replace(/^\uFEFF/, ""));
+  const out = clean.replace(/("(?:\\.|[^"\\])*")|,(?=\s*[}\]])|\s+/g, (m, str) => (str !== undefined ? str : ""));
+  JSON.parse(out); // throws if the result isn't valid JSON
+  return out;
+}
+
 function readEntry(file) {
   const raw = fs.readFileSync(file);
   if (!minify || path.extname(file).toLowerCase() !== ".json") return raw;
   try {
-    return Buffer.from(JSON.stringify(parseLooseJson(raw.toString("utf8"))), "utf8");
+    return Buffer.from(minifyJsonText(raw.toString("utf8")), "utf8");
   } catch (err) {
     console.warn(`Warning: could not minify ${file} (${err.message}); storing it unchanged.`);
     return raw;

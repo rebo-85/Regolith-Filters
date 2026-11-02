@@ -1,5 +1,11 @@
 # brarchive
 
+## 0.6.1
+
+### Patch Changes
+
+- fixed float entity property issue
+
 ## 0.6.0
 
 ### Minor Changes
