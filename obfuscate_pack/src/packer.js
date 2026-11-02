@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import JavaScriptObfuscator from "javascript-obfuscator";
 import { ENTITY_PATH_PATTERN, LOOT_TABLE_PATTERN, SOUND_DEFINITION_PATTERN, TEXTURE_SET_PATTERN } from "./constants.js";
 import { applySymbolSettings, collectClientSymbols, collectSymbols } from "./symbols.js";
-import { obfuscateBlockJson, obfuscateJson, obfuscateJsonText, obfuscateLang, obfuscatePathsJson, obfuscateTextureJson, obfuscateTextureList, obfuscateTextureSet, replacePathsString, replaceScriptString } from "./transformer.js";
+import { obfuscateBlockJson, obfuscateJson, obfuscateJsonText, obfuscateLang, obfuscatePathsJson, obfuscateTextureJson, obfuscateTextureList, obfuscateTextureSet, replaceScriptString } from "./transformer.js";
 
 function walk(dir, files = []) {
   if (!fs.existsSync(dir)) return files;
@@ -22,7 +23,7 @@ function isJson(source) {
   return path.extname(source).toLowerCase() === ".json";
 }
 
-export function createPacker({ root, args, map, symbols, paths, mapFile }) {
+export function createPacker({ root, args, map, symbols, paths, mapFile, scriptObfuscation }) {
   const tmpDir = path.join(root, ".regolith", "tmp");
   const mapDir = path.resolve(root, args.mapDir ?? "packs/data/obfuscate_pack");
   const mapFileName = args.mapFile ?? (args.profile ? `${args.profile}.map.json` : "map.json");
@@ -90,7 +91,15 @@ export function createPacker({ root, args, map, symbols, paths, mapFile }) {
     return { ext, rel, targetRel };
   }
 
-  function transformFile(source, target, rel, ext) {
+  function transformFile(source, target, rel, ext, packName) {
+    if (ext === ".js") {
+      let script = replaceScriptString(fs.readFileSync(source, "utf8"), symbols);
+      if (scriptObfuscation?.matches(`${packName}/${rel}`)) {
+        script = JavaScriptObfuscator.obfuscate(script, scriptObfuscation.options).getObfuscatedCode();
+      }
+      fs.writeFileSync(target, script, "utf8");
+      return;
+    }
     try {
       if (args.obfuscateFileContents === false) {
         if (rel === "textures/flipbook_textures.json") {
@@ -99,7 +108,6 @@ export function createPacker({ root, args, map, symbols, paths, mapFile }) {
           const textureRel = rel.replace(TEXTURE_SET_PATTERN, "");
           fs.writeFileSync(target, obfuscateTextureSet(source, symbols, textureRel), "utf8");
         } else if (ext === ".json") fs.writeFileSync(target, obfuscatePathsJson(source, symbols), "utf8");
-        else if (ext === ".js") fs.writeFileSync(target, replacePathsString(fs.readFileSync(source, "utf8"), symbols), "utf8");
         else fs.copyFileSync(source, target);
         return;
       }
@@ -123,8 +131,6 @@ export function createPacker({ root, args, map, symbols, paths, mapFile }) {
         fs.writeFileSync(target, obfuscateJsonText(source), "utf8");
       } else if (ext === ".lang") {
         fs.writeFileSync(target, obfuscateLang(source, symbols), "utf8");
-      } else if (ext === ".js") {
-        fs.writeFileSync(target, replaceScriptString(fs.readFileSync(source, "utf8"), symbols), "utf8");
       } else fs.copyFileSync(source, target);
     } catch (error) {
       fs.copyFileSync(source, target);
@@ -139,7 +145,7 @@ export function createPacker({ root, args, map, symbols, paths, mapFile }) {
       const { ext, rel, targetRel } = getTarget(pack, packName, source);
       const target = path.join(stage, targetRel);
       fs.mkdirSync(path.dirname(target), { recursive: true });
-      transformFile(source, target, rel, ext);
+      transformFile(source, target, rel, ext, packName);
     }
     fs.rmSync(pack, { recursive: true, force: true });
     try {

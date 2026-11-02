@@ -20,6 +20,19 @@ The filter also rewrites identifiers inside `.lang` translation keys after `name
 
 Client-entity aliases are only obfuscated when their values resolve to definitions or assets present in the staged packs. Vanilla animation, geometry, material, and texture references are left unchanged.
 
+JavaScript files can be obfuscated by setting `scripts` in the filter arguments. `include` accepts pack-qualified glob patterns, and `config` is a path relative to the project root:
+
+```json
+{
+  "scripts": {
+    "include": ["BP/scripts/**/*.js"],
+    "config": "packs/data/gametests/obfuscator.config.json"
+  }
+}
+```
+
+Script string references are rewritten before the JavaScript obfuscator runs. Omitting `scripts` keeps the existing behavior.
+
 Run this filter before `brarchive` when publishing obfuscated archives.
 
 ## Choosing what to obfuscate

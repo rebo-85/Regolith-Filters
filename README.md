@@ -5,7 +5,7 @@ Reusable Regolith filters for ReBo Bedrock addon repositories.
 ## Filters
 
 - `bump_manifest`: Bumps addon manifest version numbers automatically during build
-- `obfuscate_pack`: Obfuscates JSON pack filenames and contents while preserving stable mappings.
+- `obfuscate_pack`: Obfuscates pack contents, filenames, and optional JavaScript scripts while preserving stable mappings.
 - `brarchive`: Archives staged behavior and resource packs with brarchive.
 - `packager`: Packages staged behavior and resource packs as mcpack and mcaddon files.
 
@@ -52,7 +52,7 @@ root. Reference the repository root and select the filter by its directory name:
   },
   "obfuscate_pack": {
     "url": "github.com/rebo-85/Regolith-Filters",
-    "version": "obfuscate_pack@1.1.2"
+    "version": "obfuscate_pack@1.2.0"
   },
   "brarchive": {
     "url": "github.com/rebo-85/Regolith-Filters",

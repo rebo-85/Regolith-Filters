@@ -1,5 +1,11 @@
 # obfuscate_pack
 
+## 1.2.0
+
+### Minor Changes
+
+- Add optional JavaScript obfuscation through `scripts.include` glob patterns and a project-root-relative `scripts.config` path.
+
 ## 1.1.2
 
 ### Patch Changes
