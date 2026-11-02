@@ -1,5 +1,11 @@
 # obfuscate_pack
 
+## 1.2.1
+
+### Patch Changes
+
+- Resolve `javascript-obfuscator` from the configured consumer requirements directory so Regolith cache installs do not need filter-local npm dependencies.
+
 ## 1.2.0
 
 ### Minor Changes

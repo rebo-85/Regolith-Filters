@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { createPacker } from "./packer.js";
 import { createPathMapper } from "./path-utils.js";
@@ -47,16 +48,27 @@ function createScriptObfuscation(settings) {
   if (typeof settings.config !== "string" || !settings.config.trim()) {
     throw new TypeError("scripts.config must be a path to a JavaScript obfuscator config JSON file");
   }
+  if (typeof settings.requirements !== "string" || !settings.requirements.trim()) {
+    throw new TypeError("scripts.requirements must point to a directory with javascript-obfuscator installed");
+  }
 
   const configPath = path.resolve(root, settings.config);
+  const requirementsPath = path.resolve(root, settings.requirements);
   const options = JSON.parse(fs.readFileSync(configPath, "utf8"));
   if (!options || typeof options !== "object" || Array.isArray(options)) {
     throw new TypeError(`JavaScript obfuscator config must contain a JSON object: ${configPath}`);
   }
+  const requireFromRequirements = createRequire(path.join(requirementsPath, "package.json"));
+  let JavaScriptObfuscator;
+  try {
+    JavaScriptObfuscator = requireFromRequirements("javascript-obfuscator");
+  } catch (error) {
+    throw new Error(`Could not load javascript-obfuscator from ${requirementsPath}. Install it in that package directory.`, { cause: error });
+  }
   const include = settings.include.map(globToRegExp);
   return {
     matches: (packPath) => include.some((pattern) => pattern.test(packPath.replace(/\\/g, "/"))),
-    options
+    obfuscate: (source) => JavaScriptObfuscator.obfuscate(source, options).getObfuscatedCode()
   };
 }
 

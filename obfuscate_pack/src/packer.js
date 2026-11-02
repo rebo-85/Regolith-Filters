@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import JavaScriptObfuscator from "javascript-obfuscator";
 import { ENTITY_PATH_PATTERN, LOOT_TABLE_PATTERN, SOUND_DEFINITION_PATTERN, TEXTURE_SET_PATTERN } from "./constants.js";
 import { applySymbolSettings, collectClientSymbols, collectSymbols } from "./symbols.js";
 import { obfuscateBlockJson, obfuscateJson, obfuscateJsonText, obfuscateLang, obfuscatePathsJson, obfuscateTextureJson, obfuscateTextureList, obfuscateTextureSet, replaceScriptString } from "./transformer.js";
@@ -95,7 +94,7 @@ export function createPacker({ root, args, map, symbols, paths, mapFile, scriptO
     if (ext === ".js") {
       let script = replaceScriptString(fs.readFileSync(source, "utf8"), symbols);
       if (scriptObfuscation?.matches(`${packName}/${rel}`)) {
-        script = JavaScriptObfuscator.obfuscate(script, scriptObfuscation.options).getObfuscatedCode();
+        script = scriptObfuscation.obfuscate(script);
       }
       fs.writeFileSync(target, script, "utf8");
       return;

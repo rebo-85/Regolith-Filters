@@ -26,12 +26,13 @@ JavaScript files can be obfuscated by setting `scripts` in the filter arguments.
 {
   "scripts": {
     "include": ["BP/scripts/**/*.js"],
-    "config": "packs/data/gametests/obfuscator.config.json"
+    "config": "packs/data/gametests/obfuscator.config.json",
+    "requirements": "packs/data/gametests"
   }
 }
 ```
 
-Script string references are rewritten before the JavaScript obfuscator runs. Omitting `scripts` keeps the existing behavior.
+Install `javascript-obfuscator` in the package directory specified by `scripts.requirements`. Script string references are rewritten before the JavaScript obfuscator runs. Omitting `scripts` keeps the existing behavior.
 
 Run this filter before `brarchive` when publishing obfuscated archives.
 

@@ -15,7 +15,8 @@ After changing one or more filters, use the VS Code Command Palette
 (`Tasks: Run Task`) and run these steps:
 
 1. Run **Create Changeset and Apply Version Bumps**.
-2. Review the changed files, then commit and push them to `main`.
+2. Review the changed files, including the updated `pnpm-lock.yaml`, then commit
+   the changeset, version changes, and lockfile together and push them to `main`.
 
 The GitHub Actions release workflow publishes the packages after the push. Do not
 publish locally; the release command checks that the working tree is clean, the
@@ -52,7 +53,7 @@ root. Reference the repository root and select the filter by its directory name:
   },
   "obfuscate_pack": {
     "url": "github.com/rebo-85/Regolith-Filters",
-    "version": "obfuscate_pack@1.2.0"
+    "version": "obfuscate_pack@1.2.1"
   },
   "brarchive": {
     "url": "github.com/rebo-85/Regolith-Filters",
