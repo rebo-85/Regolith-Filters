@@ -1,5 +1,11 @@
 # packager
 
+## 0.5.4
+
+### Patch Changes
+
+- add version to output name
+
 ## 0.5.3
 
 ### Patch Changes

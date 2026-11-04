@@ -19,6 +19,22 @@ function readProjectName() {
 
 const baseName = args.name ?? readProjectName();
 
+function formatVersion(version) {
+  const parts = typeof version === "string" && /^\d+\.\d+\.\d+$/.test(version)
+    ? version.split(".").map(Number)
+    : Array.isArray(version)
+      ? version
+      : version && typeof version === "object"
+        ? [version.major, version.minor, version.patch]
+        : null;
+
+  if (!parts || parts.length !== 3 || !parts.every((part) => Number.isInteger(part) && part >= 0)) {
+    throw new Error(`Unsupported pack version: ${JSON.stringify(version)}`);
+  }
+
+  return parts.join(".");
+}
+
 function walk(dir, files = []) {
   for (const name of fs.readdirSync(dir).sort()) {
     const file = path.join(dir, name);
@@ -111,17 +127,30 @@ const packs = ["BP", "RP"].map((name) => ({ name, dir: path.join(tmpDir, name) }
 
 if (packs.length === 0) throw new Error("No staged BP or RP packs were found.");
 
+const versions = packs.map(({ name, dir }) => {
+  const manifestPath = path.join(dir, "manifest.json");
+  if (!fs.existsSync(manifestPath)) throw new Error(`Missing ${name} manifest: ${manifestPath}`);
+
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  return { name, version: formatVersion(manifest.header?.version) };
+});
+
+const version = versions[0].version;
+if (versions.some((pack) => pack.version !== version)) {
+  throw new Error(`Staged pack versions do not match: ${versions.map(({ name, version: value }) => `${name} ${value}`).join(", ")}`);
+}
+
 fs.rmSync(outputDir, { recursive: true, force: true });
 fs.mkdirSync(outputDir, { recursive: true });
 
 const packEntries = [];
 for (const pack of packs) {
   const data = packDirectory(pack.dir);
-  const fileName = `${baseName} ${pack.name}.mcpack`;
+  const fileName = `${baseName} ${pack.name}-${version}.mcpack`;
   fs.writeFileSync(path.join(outputDir, fileName), data);
   packEntries.push({ name: fileName, data });
 }
 
-const addonName = `${baseName}.mcaddon`;
+const addonName = `${baseName}-${version}.mcaddon`;
 fs.writeFileSync(path.join(outputDir, addonName), createZip(packEntries));
 console.log(`Wrote ${packEntries.length} mcpack file(s) and ${addonName} to ${path.relative(root, outputDir)}`);

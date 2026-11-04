@@ -61,7 +61,7 @@ root. Reference the repository root and select the filter by its directory name:
   },
   "packager": {
     "url": "github.com/rebo-85/Regolith-Filters",
-    "version": "packager@0.5.3"
+    "version": "packager@0.5.4"
   }
 }
 ```
