@@ -1,6 +1,6 @@
 {
   "exportData": true,
-  "description": "Bumps addon manifest version numbers automatically during build",
+  "description": "Regolith filter that increments major, minor, or patch versions across RP and BP manifests",
   "filters": [
     {
       "name": "Bump Manifests",
@@ -8,5 +8,5 @@
       "script": "./src/main.js"
     }
   ],
-  "version": "1.0.3"
+  "version": "1.1.0"
 }

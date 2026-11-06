@@ -1,6 +1,6 @@
 {
   "name": "bump_manifest",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "private": true,
-  "description": "Regolith filter that increments version fields across RP and BP manifest.json files"
+  "description": "Regolith filter that increments major, minor, or patch versions across RP and BP manifests"
 }

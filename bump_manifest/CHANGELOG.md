@@ -1,5 +1,11 @@
 # bump_manifest
 
+## 1.1.0
+
+### Minor Changes
+
+- Support selecting major, minor, or patch version increments.
+
 ## 1.0.3
 
 ### Patch Changes

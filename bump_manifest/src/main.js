@@ -3,10 +3,38 @@ const path = require("path");
 
 const VERSION_DIR = path.join(".", "data", "bump_manifest");
 const VERSION_FILE = path.join(VERSION_DIR, "version.json");
+const VERSION_BUMP_ENV = "BUMP_MANIFEST_VERSION_BUMP";
+const VERSION_BUMP_TYPES = new Set(["major", "minor", "patch"]);
 
 function createVersionFile() {
   fs.mkdirSync(VERSION_DIR, { recursive: true });
   fs.writeFileSync(VERSION_FILE, JSON.stringify({ version: [1, 0, 0] }, null, 4));
+}
+
+function incrementVersion(version, bumpType) {
+  if (
+    !Array.isArray(version) ||
+    version.length !== 3 ||
+    !version.every((part) => Number.isInteger(part) && part >= 0)
+  ) {
+    throw new Error(
+      `${VERSION_FILE} must contain a version array of three non-negative integers.`,
+    );
+  }
+
+  const [major, minor, patch] = version;
+  switch (bumpType) {
+    case "major":
+      return [major + 1, 0, 0];
+    case "minor":
+      return [major, minor + 1, 0];
+    case "patch":
+      return [major, minor, patch + 1];
+    default:
+      throw new Error(
+        `${VERSION_BUMP_ENV} must be one of: ${[...VERSION_BUMP_TYPES].join(", ")}.`,
+      );
+  }
 }
 
 function getVersion() {
@@ -19,8 +47,13 @@ function getVersion() {
   const fileContent = fs.readFileSync(VERSION_FILE, "utf8");
   const data = JSON.parse(fileContent);
 
-  // Increment last number in array (patch version)
-  data.version[data.version.length - 1] += 1;
+  const bumpType = process.env[VERSION_BUMP_ENV] || "patch";
+  if (!VERSION_BUMP_TYPES.has(bumpType)) {
+    throw new Error(
+      `${VERSION_BUMP_ENV} must be one of: ${[...VERSION_BUMP_TYPES].join(", ")}.`,
+    );
+  }
+  data.version = incrementVersion(data.version, bumpType);
 
   // Write updated version back to file
   fs.writeFileSync(VERSION_FILE, JSON.stringify(data, null, 4) + "\n");
