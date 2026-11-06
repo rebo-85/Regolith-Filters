@@ -25,8 +25,9 @@ export function setUnicodeEnabled(enabled) {
 }
 
 function encodeUnicodeString(value) {
+  // Iterate UTF-16 code units (not code points) so astral characters become valid surrogate-pair escapes.
   let result = "";
-  for (const char of value) result += `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`;
+  for (let idx = 0; idx < value.length; idx++) result += `\\u${value.charCodeAt(idx).toString(16).padStart(4, "0")}`;
   return result;
 }
 
@@ -40,24 +41,27 @@ export function unicodeJsonText(text) {
       continue;
     }
     const start = idx++;
-    let value = "";
     let escaped = false;
     while (idx < text.length) {
       const char = text[idx++];
-      if (escaped) {
-        value += `\\${char}`;
-        escaped = false;
-      } else if (char === "\\") {
-        value += char;
-        escaped = true;
-      } else if (char === '"') break;
-      else value += char;
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') break;
+    }
+    const token = text.slice(start, idx);
+    let value;
+    try {
+      // Decode the token so escapes like \n and \" are re-encoded by meaning, not character by character.
+      value = JSON.parse(token);
+    } catch {
+      result += token;
+      continue;
     }
     let next = idx;
     while (/\s/.test(text[next] ?? "")) next++;
     const isKey = text[next] === ":";
     const keep = isKey && value === "format_version";
-    result += keep ? text.slice(start, idx) : `"${encodeUnicodeString(value)}"`;
+    result += keep ? token : `"${encodeUnicodeString(value)}"`;
   }
   return result;
 }
@@ -114,23 +118,6 @@ function escapePattern(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function replaceExactTokens(value, entries, { allowDotPrefix = false } = {}) {
-  let result = value;
-  for (const [original, replacement] of entries) {
-    if (!original) continue;
-    const pattern = new RegExp(`(^|[^A-Za-z0-9_:/-])${escapePattern(original)}(?=$|[^A-Za-z0-9_:/-])`, "g");
-    result = result.replace(pattern, (match, prefix) => (prefix === "." && !allowDotPrefix ? match : `${prefix}${replacement}`));
-  }
-  return result;
-}
-
-function replaceTokenSet(value, entries, { allowDotPrefix = false } = {}) {
-  if (!entries.length) return value;
-  const replacements = new Map(entries);
-  const pattern = new RegExp(`(^|[^A-Za-z0-9_:/-])(${entries.map(([original]) => escapePattern(original)).join("|")})(?=$|[^A-Za-z0-9_:/-])`, "g");
-  return value.replace(pattern, (match, prefix, original) => (prefix === "." && !allowDotPrefix ? match : `${prefix}${replacements.get(original)}`));
-}
-
 function refName(value, name) {
   const namespaced = value.match(/^([^:]+):(.+)$/);
   if (namespaced) return `${namespaced[1]}:${name}`;
@@ -146,58 +133,118 @@ function aliasName(value, name) {
   return namespaced ? `${namespaced[1]}:${name}` : name;
 }
 
-export function replaceString(value, symbols, { skipAssetIds = false, allowDotPrefix = false } = {}) {
-  let result = value;
-  for (const [original, replacement] of Object.entries(symbols.paths).sort(([a], [b]) => b.length - a.length))
-    result = replaceExactTokens(result, [[original, replacement]], { allowDotPrefix });
-  for (const group of [skipAssetIds ? null : symbols.blockIds, skipAssetIds ? null : symbols.itemIds, symbols.tags]) {
-    if (!group) continue;
-    for (const [original, replacement] of Object.entries(group ?? {}).sort(([a], [b]) => b.length - a.length))
-      result = replaceExactTokens(result, [[original, refName(original, replacement)]], { allowDotPrefix });
+// Compiled replacers are cached per symbols object. Each stage is one regex built from every entry,
+// instead of one RegExp per symbol per string.
+let stageCache = new Map();
+let stageSymbols = null;
+
+/**
+ * Clears cached replacers. Pass "paths" when only symbols.paths changed, so the (stable) id, ref and
+ * alias replacers are kept. Call with no argument after anything else in the symbols changes.
+ */
+export function resetReplacerCache(scope = "all") {
+  if (scope === "paths") {
+    for (const key of stageCache.keys()) if (key.startsWith("paths:")) stageCache.delete(key);
+    return;
   }
-  for (const [original, replacement] of Object.entries(symbols.refs).sort(([a], [b]) => b.length - a.length))
-    result = replaceExactTokens(result, [[original, refName(original, replacement)]], { allowDotPrefix });
-  const aliases = Object.entries(symbols.aliases)
-    .sort(([a], [b]) => b.length - a.length)
-    .map(([original, replacement]) => [original, aliasName(original, replacement)]);
-  result = replaceTokenSet(result, aliases, { allowDotPrefix });
-  for (const [original, replacement] of aliases) {
-    if (!original.includes(".")) {
-      for (const prefix of ["texture.", "Geometry.", "Material.", "Array."])
-        result = replaceExactTokens(result, [[`${prefix}${original}`, `${prefix}${aliasName(original, replacement)}`]], { allowDotPrefix });
+  stageCache = new Map();
+  stageSymbols = null;
+}
+
+function cachedStage(symbols, key, build) {
+  if (stageSymbols !== symbols) {
+    stageCache = new Map();
+    stageSymbols = symbols;
+  }
+  let stage = stageCache.get(key);
+  if (!stage) {
+    stage = build();
+    stageCache.set(key, stage);
+  }
+  return stage;
+}
+
+function compileReplacer(entries, { allowDotPrefix = false } = {}) {
+  const pairs = entries.filter(([original]) => original);
+  if (!pairs.length) return (value) => value;
+  pairs.sort(([a], [b]) => b.length - a.length);
+  const replacements = new Map(pairs);
+  const pattern = new RegExp(`(^|[^A-Za-z0-9_:/-])(${pairs.map(([original]) => escapePattern(original)).join("|")})(?=$|[^A-Za-z0-9_:/-])`, "g");
+  return (value) =>
+    value.replace(pattern, (match, prefix, original) => (prefix === "." && !allowDotPrefix ? match : `${prefix}${replacements.get(original)}`));
+}
+
+function pathStage(symbols, allowDotPrefix) {
+  return cachedStage(symbols, `paths:${allowDotPrefix ? 1 : 0}`, () => compileReplacer(Object.entries(symbols.paths), { allowDotPrefix }));
+}
+
+function refStage(symbols, group, allowDotPrefix) {
+  return cachedStage(symbols, `${group}:${allowDotPrefix ? 1 : 0}`, () =>
+    compileReplacer(
+      Object.entries(symbols[group] ?? {}).map(([original, replacement]) => [original, refName(original, replacement)]),
+      { allowDotPrefix }
+    )
+  );
+}
+
+function aliasEntries(symbols) {
+  return cachedStage(symbols, "aliasEntries", () =>
+    Object.entries(symbols.aliases).map(([original, replacement]) => [original, aliasName(original, replacement)])
+  );
+}
+
+function aliasStage(symbols, allowDotPrefix) {
+  return cachedStage(symbols, `aliases:${allowDotPrefix ? 1 : 0}`, () => compileReplacer(aliasEntries(symbols), { allowDotPrefix }));
+}
+
+function prefixedAliasStage(symbols, allowDotPrefix) {
+  return cachedStage(symbols, `prefixed:${allowDotPrefix ? 1 : 0}`, () => {
+    const entries = [];
+    for (const [original, replacement] of aliasEntries(symbols))
+      if (!original.includes("."))
+        for (const prefix of ["texture.", "Geometry.", "Material.", "Array."]) entries.push([`${prefix}${original}`, `${prefix}${replacement}`]);
+    return compileReplacer(entries, { allowDotPrefix });
+  });
+}
+
+function templateAliasStage(symbols) {
+  return cachedStage(symbols, "templates", () => {
+    const templateAliases = new Map();
+    const ambiguousSuffixes = new Set();
+    for (const [original, replacement] of aliasEntries(symbols)) {
+      const separator = original.indexOf(":");
+      if (separator < 0) continue;
+      const suffix = original.slice(separator + 1);
+      const replacementSuffix = replacement.slice(replacement.indexOf(":") + 1);
+      if (templateAliases.has(suffix) && templateAliases.get(suffix) !== replacementSuffix) ambiguousSuffixes.add(suffix);
+      else templateAliases.set(suffix, replacementSuffix);
     }
+    return (value) =>
+      value.replace(/\$\{[^{}]+\}:([A-Za-z_][\w.-]*)/g, (match, suffix) => {
+        const replacement = templateAliases.get(suffix);
+        return replacement && !ambiguousSuffixes.has(suffix) ? match.slice(0, match.lastIndexOf(":") + 1) + replacement : match;
+      });
+  });
+}
+
+export function replaceString(value, symbols, { skipAssetIds = false, allowDotPrefix = false } = {}) {
+  let result = pathStage(symbols, allowDotPrefix)(value);
+  if (!skipAssetIds) {
+    result = refStage(symbols, "blockIds", allowDotPrefix)(result);
+    result = refStage(symbols, "itemIds", allowDotPrefix)(result);
   }
+  result = refStage(symbols, "tags", allowDotPrefix)(result);
+  result = refStage(symbols, "refs", allowDotPrefix)(result);
+  result = aliasStage(symbols, allowDotPrefix)(result);
+  result = prefixedAliasStage(symbols, allowDotPrefix)(result);
   return result.replace(/\bv\.([A-Za-z_][\w]*)/g, (_, name) => `v.${symbols.vars[name] ?? name}`);
 }
 
 export function replaceScriptString(value, symbols) {
-  let result = value;
-  for (const [original, replacement] of Object.entries(symbols.paths).sort(([a], [b]) => b.length - a.length))
-    result = replaceExactTokens(result, [[original, replacement]]);
-  for (const group of [symbols.blockIds, symbols.itemIds, symbols.tags]) {
-    for (const [original, replacement] of Object.entries(group ?? {}).sort(([a], [b]) => b.length - a.length))
-      result = replaceExactTokens(result, [[original, refName(original, replacement)]]);
-  }
-  for (const [original, replacement] of Object.entries(symbols.refs).sort(([a], [b]) => b.length - a.length))
-    result = replaceExactTokens(result, [[original, refName(original, replacement)]]);
-  const aliases = Object.entries(symbols.aliases)
-    .sort(([a], [b]) => b.length - a.length)
-    .map(([original, replacement]) => [original, aliasName(original, replacement)]);
-  result = replaceTokenSet(result, aliases);
-  const templateAliases = new Map();
-  const ambiguousSuffixes = new Set();
-  for (const [original, replacement] of aliases) {
-    const separator = original.indexOf(":");
-    if (separator < 0) continue;
-    const suffix = original.slice(separator + 1);
-    const replacementSuffix = replacement.slice(replacement.indexOf(":") + 1);
-    if (templateAliases.has(suffix) && templateAliases.get(suffix) !== replacementSuffix) ambiguousSuffixes.add(suffix);
-    else templateAliases.set(suffix, replacementSuffix);
-  }
-  return result.replace(/\$\{[^{}]+\}:([A-Za-z_][\w.-]*)/g, (match, suffix) => {
-    const replacement = templateAliases.get(suffix);
-    return replacement && !ambiguousSuffixes.has(suffix) ? match.slice(0, match.lastIndexOf(":") + 1) + replacement : match;
-  });
+  let result = pathStage(symbols, false)(value);
+  for (const group of ["blockIds", "itemIds", "tags", "refs"]) result = refStage(symbols, group, false)(result);
+  result = aliasStage(symbols, false)(result);
+  return templateAliasStage(symbols)(result);
 }
 
 function transform(value, symbols, context = "") {
@@ -310,9 +357,7 @@ export function obfuscateTextureList(source, symbols) {
 }
 
 export function replacePathsString(value, symbols) {
-  return Object.entries(symbols.paths)
-    .sort(([a], [b]) => b.length - a.length)
-    .reduce((result, [original, replacement]) => replaceExactTokens(result, [[original, replacement]]), value);
+  return pathStage(symbols, false)(value);
 }
 
 export function obfuscatePathsJson(source, symbols) {

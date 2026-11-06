@@ -2,31 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { stripComments } from "./transformer.js";
-import { SYMBOL_FORMAT } from "./constants.js";
-
-const SYMBOL_GROUPS_BY_CATEGORY = {
-  entityIds: ["refs"],
-  blockIds: ["blockIds"],
-  itemIds: ["itemIds"],
-  tags: ["tags"],
-  components: ["aliases"],
-  properties: ["aliases"],
-  componentGroups: ["aliases"],
-  events: ["aliases"],
-  geometry: ["refs", "aliases"],
-  animations: ["refs", "aliases"],
-  animationControllers: ["refs"],
-  renderControllers: ["refs", "aliases"],
-  materials: ["aliases"],
-  textures: ["aliases"],
-  particles: ["refs"],
-  sounds: ["refs"],
-  animationStates: ["states"],
-  bones: ["bones"],
-  renderArrays: ["aliases"],
-  scriptVariables: ["vars"],
-  blockStates: ["aliases"]
-};
+import { CATEGORIES, CATEGORY_PARENTS, SYMBOL_FORMAT, SYMBOL_GROUPS } from "./constants.js";
 
 export function makeKey(value) {
   const alphabet = "abcdefghijklmnopqrstuvwxyz";
@@ -43,26 +19,31 @@ function makeName(value, used) {
   return name;
 }
 
-function ensure(symbols, group, value) {
+// Every symbol records the categories it was found in (symbols.categories[group][value]).
+// applySymbolSettings uses this to decide per symbol, so tables shared by several categories need no special handling.
+function ensure(symbols, group, value, category) {
   if (!symbols[group][value]) symbols[group][value] = makeName(`${group}:${value}`, symbols.used);
+  const list = ((symbols.categories[group] ??= {})[value] ??= []);
+  if (!list.includes(category)) list.push(category);
   return symbols[group][value];
 }
 
-function ensureAlias(symbols, value) {
-  return ensure(symbols, "aliases", value);
+function ensureAlias(symbols, value, category) {
+  return ensure(symbols, "aliases", value, category);
 }
 
 function collectScript(value, symbols) {
   if (Array.isArray(value)) return value.forEach((item) => collectScript(item, symbols));
   if (value && typeof value === "object") return Object.values(value).forEach((item) => collectScript(item, symbols));
   if (typeof value !== "string") return;
-  for (const match of value.matchAll(/\bv\.([A-Za-z_][\w]*)/g)) ensure(symbols, "vars", match[1]);
+  for (const match of value.matchAll(/\bv\.([A-Za-z_][\w]*)/g)) ensure(symbols, "vars", match[1], "scriptVariables");
 }
 
 function collectCustomTags(value, symbols, key = "") {
   if (Array.isArray(value)) {
     if (key === "tags" || key === "family" || key.endsWith(":tags")) {
-      for (const tag of value) if (typeof tag === "string" && tag.includes(":") && !tag.startsWith("minecraft:")) ensure(symbols, "tags", tag);
+      for (const tag of value)
+        if (typeof tag === "string" && tag.includes(":") && !tag.startsWith("minecraft:")) ensure(symbols, "tags", tag, "tags");
     }
     for (const item of value) collectCustomTags(item, symbols);
     return;
@@ -74,10 +55,12 @@ function collectCustomTags(value, symbols, key = "") {
 function collectEntityDefinitions(entity, symbols) {
   const description = entity.description;
   if (!description) return;
-  if (typeof description.identifier === "string" && !description.identifier.startsWith("minecraft:")) ensure(symbols, "refs", description.identifier);
-  for (const section of ["properties", "components", "component_groups", "events"]) {
+  if (typeof description.identifier === "string" && !description.identifier.startsWith("minecraft:"))
+    ensure(symbols, "refs", description.identifier, "entityIds");
+  const sections = { properties: "entityProperties", components: "entityComponents", component_groups: "componentGroups", events: "events" };
+  for (const [section, category] of Object.entries(sections)) {
     const values = section === "properties" ? description.properties : entity[section];
-    for (const key of Object.keys(values ?? {})) if (!key.startsWith("minecraft:")) ensureAlias(symbols, key);
+    for (const key of Object.keys(values ?? {})) if (!key.startsWith("minecraft:")) ensureAlias(symbols, key, category);
   }
 }
 
@@ -85,7 +68,7 @@ function collectClientDefinitions(description, symbols) {
   for (const section of ["materials", "textures", "geometry", "animations"]) {
     for (const [key, value] of Object.entries(description[section] ?? {})) {
       const backed = typeof value === "string" && (symbols.refs[value] || symbols.paths[value] || symbols.paths[value.replace(/\.png$/i, "")]);
-      if (key !== "default" && backed) ensureAlias(symbols, key);
+      if (key !== "default" && backed) ensureAlias(symbols, key, section);
     }
   }
   collectScript(description.scripts, symbols);
@@ -93,63 +76,68 @@ function collectClientDefinitions(description, symbols) {
 
 function collectControllerDefinitions(controllers, symbols) {
   for (const [name, controller] of Object.entries(controllers ?? {})) {
-    if (name.startsWith("controller.")) ensure(symbols, "refs", name);
-    for (const state of Object.keys(controller.states ?? {})) ensure(symbols, "states", state);
+    if (name.startsWith("controller.")) ensure(symbols, "refs", name, "animationControllers");
+    for (const state of Object.keys(controller.states ?? {})) ensure(symbols, "states", state, "animationStates");
   }
 }
 
+const RENDER_REFERENCE_CATEGORIES = { texture: "textures", Geometry: "geometry", Material: "materials", Array: "renderArrays" };
+
 function collectRenderDefinitions(controllers, symbols) {
   for (const [name, controller] of Object.entries(controllers ?? {})) {
-    if (name.startsWith("controller.")) ensure(symbols, "refs", name);
+    if (name.startsWith("controller.")) ensure(symbols, "refs", name, "renderControllers");
     for (const values of Object.values(controller.arrays ?? {}))
-      for (const key of Object.keys(values ?? {})) ensureAlias(symbols, key.replace(/^array\./, ""));
-    for (const value of JSON.stringify(controller).matchAll(/(?:texture|Geometry|Material|Array)\.([A-Za-z_][\w.]*)/g))
-      if (value[1] !== "default") ensureAlias(symbols, value[1]);
+      for (const key of Object.keys(values ?? {})) ensureAlias(symbols, key.replace(/^array\./, ""), "renderArrays");
+    for (const value of JSON.stringify(controller).matchAll(/(texture|Geometry|Material|Array)\.([A-Za-z_][\w.]*)/g))
+      if (value[2] !== "default") ensureAlias(symbols, value[2], RENDER_REFERENCE_CATEGORIES[value[1]]);
   }
 }
 
 function collectDefinitions(value, symbols, source) {
   collectCustomTags(value, symbols);
   if (source.toLowerCase() === "blocks.json") {
-    for (const name of Object.keys(value)) if (name.includes(":") && !name.startsWith("minecraft:")) ensure(symbols, "blockIds", name);
+    for (const name of Object.keys(value)) if (name.includes(":") && !name.startsWith("minecraft:")) ensure(symbols, "blockIds", name, "blockIds");
   }
   const entity = value?.["minecraft:entity"];
   if (entity) collectEntityDefinitions(entity, symbols);
   const blockIdentifier = value?.["minecraft:block"]?.description?.identifier;
-  if (typeof blockIdentifier === "string" && !blockIdentifier.startsWith("minecraft:")) ensure(symbols, "blockIds", blockIdentifier);
+  if (typeof blockIdentifier === "string" && !blockIdentifier.startsWith("minecraft:")) ensure(symbols, "blockIds", blockIdentifier, "blockIds");
   const itemIdentifier = value?.["minecraft:item"]?.description?.identifier;
-  if (typeof itemIdentifier === "string" && !itemIdentifier.startsWith("minecraft:")) ensure(symbols, "itemIds", itemIdentifier);
+  if (typeof itemIdentifier === "string" && !itemIdentifier.startsWith("minecraft:")) ensure(symbols, "itemIds", itemIdentifier, "itemIds");
   if (/^(?:terrain|item)_texture\.json$/i.test(source)) {
-    for (const name of Object.keys(value?.texture_data ?? {})) if (!name.startsWith("minecraft:")) ensureAlias(symbols, name);
+    for (const name of Object.keys(value?.texture_data ?? {})) if (!name.startsWith("minecraft:")) ensureAlias(symbols, name, "textures");
   }
   for (const [key, fn] of [
     ["animation_controllers", collectControllerDefinitions],
     ["render_controllers", collectRenderDefinitions]
   ])
     if (value?.[key]) fn(value[key], symbols);
-  for (const name of Object.keys(value?.animations ?? {})) if (name.startsWith("animation.")) ensure(symbols, "refs", name);
+  for (const name of Object.keys(value?.animations ?? {})) if (name.startsWith("animation.")) ensure(symbols, "refs", name, "animations");
   for (const geometry of value?.["minecraft:geometry"] ?? []) {
-    if (typeof geometry.description?.identifier === "string") ensure(symbols, "refs", geometry.description.identifier);
-    for (const bone of geometry.bones ?? []) if (typeof bone.name === "string") ensure(symbols, "bones", bone.name.toLowerCase());
+    if (typeof geometry.description?.identifier === "string") ensure(symbols, "refs", geometry.description.identifier, "geometry");
+    for (const bone of geometry.bones ?? []) if (typeof bone.name === "string") ensure(symbols, "bones", bone.name.toLowerCase(), "bones");
   }
   if (value?.sound_definitions)
-    for (const name of Object.keys(value.sound_definitions)) if (!name.startsWith("minecraft:") && name.includes(":")) ensure(symbols, "refs", name);
+    for (const name of Object.keys(value.sound_definitions))
+      if (!name.startsWith("minecraft:") && name.includes(":")) ensure(symbols, "refs", name, "sounds");
   if (source.toLowerCase().endsWith("music_definitions.json"))
-    for (const name of Object.keys(value)) if (!name.startsWith("minecraft:") && name.includes(":")) ensure(symbols, "refs", name);
+    for (const name of Object.keys(value)) if (!name.startsWith("minecraft:") && name.includes(":")) ensure(symbols, "refs", name, "sounds");
   const culling = value?.["minecraft:block_culling_rules"];
   if (culling) {
-    if (typeof culling.description?.identifier === "string") ensure(symbols, "refs", culling.description.identifier);
+    if (typeof culling.description?.identifier === "string") ensure(symbols, "refs", culling.description.identifier, "geometry");
     for (const rule of culling.rules ?? [])
-      if (typeof rule?.geometry_part?.bone === "string") ensure(symbols, "bones", rule.geometry_part.bone.toLowerCase());
+      if (typeof rule?.geometry_part?.bone === "string") ensure(symbols, "bones", rule.geometry_part.bone.toLowerCase(), "bones");
   }
   for (const name of Object.keys(value?.["minecraft:block"]?.description?.states ?? {}))
-    if (!name.startsWith("minecraft:")) ensureAlias(symbols, name);
+    if (!name.startsWith("minecraft:")) ensureAlias(symbols, name, "blockStates");
   const block = value?.["minecraft:block"];
   for (const components of [block?.components, ...(block?.permutations ?? []).map((permutation) => permutation.components)]) {
-    for (const name of Object.keys(components ?? {})) if (!name.startsWith("minecraft:")) ensureAlias(symbols, name);
+    for (const name of Object.keys(components ?? {})) if (!name.startsWith("minecraft:")) ensureAlias(symbols, name, "blockComponents");
   }
+  for (const name of Object.keys(value?.["minecraft:item"]?.components ?? {}))
+    if (!name.startsWith("minecraft:")) ensureAlias(symbols, name, "itemComponents");
   const particle = value?.particle_effect?.description?.identifier;
-  if (typeof particle === "string" && !particle.startsWith("minecraft:")) ensure(symbols, "refs", particle);
+  if (typeof particle === "string" && !particle.startsWith("minecraft:")) ensure(symbols, "refs", particle, "particles");
 }
 
 export function createSymbols(map) {
@@ -177,6 +165,7 @@ export function createSymbols(map) {
   symbols.blockIds ??= {};
   symbols.itemIds ??= {};
   symbols.tags ??= {};
+  symbols.categories = {}; // rebuilt on every run while collecting; never stored in the map
   delete symbols.keys;
   symbols.used = new Set(
     Object.values(symbols.aliases).concat(
@@ -191,25 +180,48 @@ export function createSymbols(map) {
   return symbols;
 }
 
+function readSettings(settings, name, validate) {
+  const value = settings[name] ?? {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${name} must be an object keyed by category`);
+  for (const [category, entry] of Object.entries(value)) {
+    if (!CATEGORIES.has(category)) throw new TypeError(`Unknown ${name} category "${category}". Valid categories: ${[...CATEGORIES].join(", ")}`);
+    validate(category, entry);
+  }
+  return value;
+}
+
 export function applySymbolSettings(symbols, settings) {
-  const obfuscateCategories = settings.obfuscate ?? {};
-  if (!obfuscateCategories || typeof obfuscateCategories !== "object" || Array.isArray(obfuscateCategories))
-    throw new TypeError("obfuscate must be an object of category booleans");
-  const excludedSymbols = settings.exclude ?? {};
-  if (!excludedSymbols || typeof excludedSymbols !== "object" || Array.isArray(excludedSymbols))
-    throw new TypeError("exclude must be an object of category arrays");
-  for (const [category, groups] of Object.entries(SYMBOL_GROUPS_BY_CATEGORY)) {
-    const legacyCategory = category === "blockIds" ? "blocks" : "";
-    const enabled = obfuscateCategories[category] ?? obfuscateCategories[legacyCategory] ?? true;
-    if (typeof enabled !== "boolean") throw new TypeError(`obfuscate.${category} must be a boolean`);
-    const excluded = excludedSymbols[category] ?? excludedSymbols[legacyCategory] ?? [];
-    if (!Array.isArray(excluded) || excluded.some((value) => typeof value !== "string"))
+  const enabledByCategory = readSettings(settings, "obfuscate", (category, entry) => {
+    if (typeof entry !== "boolean") throw new TypeError(`obfuscate.${category} must be a boolean`);
+  });
+  const excludedByCategory = readSettings(settings, "exclude", (category, entry) => {
+    if (!Array.isArray(entry) || entry.some((name) => typeof name !== "string"))
       throw new TypeError(`exclude.${category} must be an array of strings`);
-    if (enabled && excluded.length === 0) continue;
-    for (const group of groups)
-      for (const value of Object.keys(symbols[group]))
-        if (!enabled || excluded.includes(value) || (group === "bones" && excluded.some((name) => name.toLowerCase() === value)))
-          delete symbols[group][value];
+  });
+
+  // The most specific setting wins: a category's own `obfuscate` value, else its parent's, else true.
+  // `exclude` lists add up: a category excludes its own names and those listed on its parent.
+  const isEnabled = (category) => enabledByCategory[category] ?? enabledByCategory[CATEGORY_PARENTS[category]] ?? true;
+
+  // Bone names are stored lowercase because Bedrock matches them case-insensitively.
+  const isExcluded = (group, category, name) =>
+    [category, CATEGORY_PARENTS[category]].some((key) =>
+      excludedByCategory[key]?.some((excluded) => (group === "bones" ? excluded.toLowerCase() === name : excluded === name))
+    );
+
+  for (const group of SYMBOL_GROUPS) {
+    for (const value of Object.keys(symbols[group])) {
+      const categories = symbols.categories[group]?.[value];
+      // Not found in any pack this run: a stale entry from an earlier build, so drop it from the map.
+      if (!categories?.length) {
+        delete symbols[group][value];
+        continue;
+      }
+      // A name used in several categories is renamed everywhere or nowhere,
+      // so one disabled or excluding category is enough to keep it readable.
+      const keepReadable = categories.some((category) => !isEnabled(category) || isExcluded(group, category, value));
+      if (keepReadable) delete symbols[group][value];
+    }
   }
 }
 

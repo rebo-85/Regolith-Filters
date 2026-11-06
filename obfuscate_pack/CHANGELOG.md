@@ -1,5 +1,11 @@
 # obfuscate_pack
 
+## 1.3.0
+
+### Minor Changes
+
+- Removed blocks legacy and add more filter categories
+
 ## 1.2.1
 
 ### Patch Changes
