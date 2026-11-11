@@ -12,14 +12,8 @@ function createVersionFile() {
 }
 
 function incrementVersion(version, bumpType) {
-  if (
-    !Array.isArray(version) ||
-    version.length !== 3 ||
-    !version.every((part) => Number.isInteger(part) && part >= 0)
-  ) {
-    throw new Error(
-      `${VERSION_FILE} must contain a version array of three non-negative integers.`,
-    );
+  if (!Array.isArray(version) || version.length !== 3 || !version.every((part) => Number.isInteger(part) && part >= 0)) {
+    throw new Error(`${VERSION_FILE} must contain a version array of three non-negative integers.`);
   }
 
   const [major, minor, patch] = version;
@@ -31,15 +25,15 @@ function incrementVersion(version, bumpType) {
     case "patch":
       return [major, minor, patch + 1];
     default:
-      throw new Error(
-        `${VERSION_BUMP_ENV} must be one of: ${[...VERSION_BUMP_TYPES].join(", ")}.`,
-      );
+      throw new Error(`${VERSION_BUMP_ENV} must be one of: ${[...VERSION_BUMP_TYPES].join(", ")}.`);
   }
 }
 
 function getVersion() {
+  const isFirstRun = !fs.existsSync(VERSION_FILE);
+
   // Create version file if it doesn't exist
-  if (!fs.existsSync(VERSION_FILE)) {
+  if (isFirstRun) {
     createVersionFile();
   }
 
@@ -47,11 +41,14 @@ function getVersion() {
   const fileContent = fs.readFileSync(VERSION_FILE, "utf8");
   const data = JSON.parse(fileContent);
 
+  // First release: keep the initial 1.0.0 without bumping
+  if (isFirstRun) {
+    return data.version;
+  }
+
   const bumpType = process.env[VERSION_BUMP_ENV] || "patch";
   if (!VERSION_BUMP_TYPES.has(bumpType)) {
-    throw new Error(
-      `${VERSION_BUMP_ENV} must be one of: ${[...VERSION_BUMP_TYPES].join(", ")}.`,
-    );
+    throw new Error(`${VERSION_BUMP_ENV} must be one of: ${[...VERSION_BUMP_TYPES].join(", ")}.`);
   }
   data.version = incrementVersion(data.version, bumpType);
 
