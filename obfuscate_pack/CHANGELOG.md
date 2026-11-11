@@ -1,5 +1,11 @@
 # obfuscate_pack
 
+## 1.3.1
+
+### Patch Changes
+
+- Handle sounds.json and resolve texture aliases
+
 ## 1.3.0
 
 ### Minor Changes

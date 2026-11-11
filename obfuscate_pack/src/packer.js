@@ -73,6 +73,8 @@ export function createPacker({ root, args, map, symbols, paths, mapFile, scriptO
     const key = `${packName.toLowerCase()}/${rel}`;
     const ext = path.extname(source).toLowerCase();
     let targetRel = rel;
+    // Fixed files keep their name, so drop any hashed name an earlier build stored for them.
+    if (paths.isFixedName(rel)) delete map[key];
     if (LOOT_TABLE_PATTERN.test(rel)) targetRel = paths.targetRelFor(rel, packName, map, symbols);
     if (/^textures\//i.test(rel) && rel !== "textures/textures_list.json") targetRel = symbols.paths[rel] ?? rel;
     if (/^sounds\//i.test(rel) && rel !== "sounds/sound_definitions.json") targetRel = symbols.paths[rel] ?? rel;
@@ -136,6 +138,9 @@ export function createPacker({ root, args, map, symbols, paths, mapFile, scriptO
         fs.writeFileSync(target, obfuscateTextureJson(source, symbols), "utf8");
       } else if (rel === "textures/flipbook_textures.json") {
         fs.writeFileSync(target, obfuscateJson(source, symbols), "utf8");
+      } else if (rel === "sounds.json") {
+        // Fixed name, but its entity and block ids still have to follow the renamed ids.
+        fs.writeFileSync(target, obfuscateJson(source, symbols, "sounds_json"), "utf8");
       } else if (ext === ".json" && !paths.isFixedName(rel)) {
         fs.writeFileSync(target, obfuscateJson(source, symbols), "utf8");
       } else if (rel === "blocks.json") {

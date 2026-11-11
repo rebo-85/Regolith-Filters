@@ -251,11 +251,23 @@ function transform(value, symbols, context = "") {
   if (Array.isArray(value)) return value.map((item) => transform(item, symbols, context));
   if (typeof value === "string") {
     if (value.startsWith(FLOAT_MARK)) return value;
+    if (context === "icon_texture") {
+      // An item icon names a key of item_texture.json, and those keys are renamed through `aliases` only.
+      // Going through replaceString would swap it for a block, item or entity id that shares the same text.
+      const replacement = symbols.aliases[value];
+      return replacement ? aliasName(value, replacement) : value;
+    }
     if (context === "render_geometry" && value.startsWith("Geometry.")) return `Geometry.${replaceString(value.slice("Geometry.".length), symbols)}`;
     if (context === "render_textures" && value.startsWith("Texture.")) return `Texture.${replaceString(value.slice("Texture.".length), symbols)}`;
     if (context === "block_id") return symbols.blockIds[value] ? refName(value, symbols.blockIds[value]) : value;
     if (context === "item_id") return symbols.itemIds[value] ? refName(value, symbols.itemIds[value]) : value;
-    if (context === "texture") return replaceString(value, symbols, { skipAssetIds: true });
+    if (context === "texture") {
+      // A material instance texture is a terrain_texture.json key, and those keys are renamed through
+      // `aliases` only. replaceString would also apply `refs`, so a key that shares its text with an
+      // entity id (rb_ji:jeb_cushion) would point at the entity's replacement instead of the key's.
+      const replacement = symbols.aliases[value];
+      return replacement ? aliasName(value, replacement) : replacePathsString(value, symbols);
+    }
     if (context === "texture_id") {
       const replacement = symbols.aliases[value];
       return replacement ? aliasName(value, replacement) : replaceString(value, symbols, { skipAssetIds: true });
@@ -287,7 +299,12 @@ function transform(value, symbols, context = "") {
       } else if (context === "bones" && key === "name") childContext = "bone_name";
       else if (context === "bones" && key === "parent") childContext = "bone_parent";
       else if (context === "transition" && symbols.states[key]) nextKey = symbols.states[key];
-      else if (symbols.aliases[key]) nextKey = aliasName(key, symbols.aliases[key]);
+      else if (context === "sound_entities" || context === "sound_blocks") {
+        // sounds.json keys are entity or block ids. They must be renamed like the same id inside the
+        // entity and block files (replaceString), not through the texture alias that may share the text.
+        if (key.includes(":")) nextKey = replaceString(key, symbols);
+        childContext = context === "sound_entities" ? "sound_entity" : "sound_block";
+      } else if (symbols.aliases[key]) nextKey = aliasName(key, symbols.aliases[key]);
       if (key === "minecraft:block") childContext = "block_root";
       if (key === "minecraft:item") childContext = "item_root";
       if ((context === "block_root" || context === "item_root") && key === "description") childContext = `${context}_description`;
@@ -312,6 +329,12 @@ function transform(value, symbols, context = "") {
       if (context === "animation" && key === "bones") childContext = "animation_bones";
       if (context === "geometry_part" && key === "bone") childContext = "bone_name";
       if (key === "minecraft:geometry") childContext = "geometry_root";
+      if (key === "minecraft:icon") childContext = "icon_texture";
+      if (context === "icon_texture") childContext = "icon_texture";
+      if (context === "sounds_json" && key === "entity_sounds") childContext = "sound_entity_sounds";
+      if (context === "sounds_json" && key === "block_sounds") childContext = "sound_blocks";
+      if (context === "sounds_json" && key === "interactive_sounds") childContext = "sounds_json";
+      if (context === "sound_entity_sounds" && key === "entities") childContext = "sound_entities";
       return [nextKey, transform(item, symbols, childContext)];
     })
   );
