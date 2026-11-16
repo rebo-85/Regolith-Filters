@@ -1,5 +1,19 @@
 # obfuscate_pack
 
+## 1.4.1
+
+### Patch Changes
+
+- Fix render controller array keys. Bedrock writes them as `Array.<name>` with a capital `A`, but only the lowercase `array.` prefix was recognised, so the whole key was replaced and the controller failed to load. The prefix is now matched case-insensitively and its casing is kept.
+- With `unicode` on, `Array.<name>` keys are no longer escaped, because Bedrock matches them by their literal text (like `format_version`).
+- Rewrite translation keys that appear as values in pack JSON, such as `minecraft:display_name` (`tile.ns:id.name`, `item.ns:id.name`, `entity.ns:id.name`), so they follow the renamed block, item and entity ids exactly like the matching `.lang` keys. This covers blocks, items and spawn eggs.
+- Stop client-only alias names (geometry, material, texture, animation and render array names such as `wheel`, `door` or `hide`) from being rewritten inside scripts, `.lang` keys and translation-key strings. Only plain words that no script or language file ever refers to were affected, for example `"wheel"` becoming a hash while the object key `wheel:` stayed unchanged. Namespaced aliases (containing `:`) are unaffected.
+- Rewrite `item_catalog/crafting_item_catalog.json`. The file keeps its required name and location, but its item ids and icons now follow the renamed ids, so creative groups and item catalogs keep working.
+- Keep the bones named in a block's `minecraft:geometry` `bone_visibility` readable. Bedrock ignored `bone_visibility` when those bones were renamed, so every bone of the block showed at once.
+- Rename `part_visibility` keys in render controllers together with the geometry bones. Before, a controller such as `{"*": false}, {"lever_base": true}` pointed at bones that no longer existed and hid the whole entity. A `part_visibility` key that shared its text with a client alias (such as `torch`) could also be rewritten to the alias instead of the bone.
+- Keep the bones named in render controller `part_visibility` readable as well, for the same reason as `bone_visibility`.
+- Never rename the bone names that Bedrock looks up itself: `rightItem`, `leftItem`, `rightArm` and `leftArm`. Renaming `rightItem` and `leftItem` stopped entities that show blocks as held items from rendering them. These reserved names apply whatever the `obfuscate` and `exclude` settings say.
+
 ## 1.4.0
 
 ### Minor Changes

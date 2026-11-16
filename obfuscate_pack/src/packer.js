@@ -139,6 +139,9 @@ export function createPacker({ root, args, map, symbols, paths, mapFile, scriptO
         fs.writeFileSync(target, obfuscateTextureJson(source, symbols), "utf8");
       } else if (rel === "textures/flipbook_textures.json") {
         fs.writeFileSync(target, obfuscateJson(source, symbols), "utf8");
+      } else if (rel === "item_catalog/crafting_item_catalog.json") {
+        // Fixed name (Bedrock only loads it from here), but its item ids and icon still have to follow the renamed ids.
+        fs.writeFileSync(target, obfuscateJson(source, symbols, "crafting_catalog"), "utf8");
       } else if (rel === "sounds.json") {
         // Fixed name, but its entity and block ids still have to follow the renamed ids.
         fs.writeFileSync(target, obfuscateJson(source, symbols, "sounds_json"), "utf8");

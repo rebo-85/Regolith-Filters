@@ -65,7 +65,9 @@ export function unicodeJsonText(text) {
     let next = idx;
     while (/\s/.test(text[next] ?? "")) next++;
     const isKey = text[next] === ":";
-    const keep = isKey && value === "format_version";
+    // Bedrock matches these keys by their literal text, so they must stay readable:
+    // "format_version" and render controller array names ("Array.<name>").
+    const keep = isKey && (value === "format_version" || /^array\./i.test(value));
     result += keep ? token : `"${encodeUnicodeString(value)}"`;
   }
   return result;
@@ -256,6 +258,24 @@ function aliasStage(symbols, allowDotPrefix) {
   return cachedStage(symbols, `aliases:${allowDotPrefix ? 1 : 0}`, () => compileReplacer(aliasEntries(symbols), { allowDotPrefix }));
 }
 
+// Short names that exist only in client-side definitions (geometry, materials, animations, render arrays,
+// textures). Scripts cannot address them, but common words such as "wheel" or "door" also show up in script
+// strings and object keys, so renaming them there breaks lookups (RECIPES["wheel"] -> undefined).
+const CLIENT_ONLY_CATEGORIES = new Set(["geometry", "materials", "textures", "animations", "renderArrays"]);
+
+function scriptAliasStage(symbols, allowDotPrefix = false) {
+  return cachedStage(symbols, `scriptAliases:${allowDotPrefix ? 1 : 0}`, () =>
+    compileReplacer(
+      aliasEntries(symbols).filter(([original]) => {
+        if (original.includes(":")) return true;
+        const categories = symbols.categories?.aliases?.[original];
+        return !(categories?.length && categories.every((category) => CLIENT_ONLY_CATEGORIES.has(category)));
+      }),
+      { allowDotPrefix }
+    )
+  );
+}
+
 function prefixedAliasStage(symbols, allowDotPrefix) {
   return cachedStage(symbols, `prefixed:${allowDotPrefix ? 1 : 0}`, () => {
     const entries = [];
@@ -286,7 +306,7 @@ function templateAliasStage(symbols) {
   });
 }
 
-export function replaceString(value, symbols, { skipAssetIds = false, allowDotPrefix = false } = {}) {
+export function replaceString(value, symbols, { skipAssetIds = false, allowDotPrefix = false, skipClientAliases = false } = {}) {
   let result = pathStage(symbols, allowDotPrefix)(value);
   if (!skipAssetIds) {
     result = refStage(symbols, "blockIds", allowDotPrefix)(result);
@@ -294,15 +314,20 @@ export function replaceString(value, symbols, { skipAssetIds = false, allowDotPr
   }
   result = refStage(symbols, "tags", allowDotPrefix)(result);
   result = refStage(symbols, "refs", allowDotPrefix)(result);
-  result = aliasStage(symbols, allowDotPrefix)(result);
-  result = prefixedAliasStage(symbols, allowDotPrefix)(result);
+  // Translation keys and script text can contain the same plain words as client-only names ("wheel"),
+  // and neither the game nor a script ever refers to those names, so they are left alone there.
+  if (skipClientAliases) result = scriptAliasStage(symbols, allowDotPrefix)(result);
+  else {
+    result = aliasStage(symbols, allowDotPrefix)(result);
+    result = prefixedAliasStage(symbols, allowDotPrefix)(result);
+  }
   return result.replace(/\bv\.([A-Za-z_][\w]*)/g, (_, name) => `v.${symbols.vars[name] ?? name}`);
 }
 
 export function replaceScriptString(value, symbols) {
   let result = pathStage(symbols, false)(value);
   for (const group of ["blockIds", "itemIds", "tags", "refs"]) result = refStage(symbols, group, false)(result);
-  result = aliasStage(symbols, false)(result);
+  result = scriptAliasStage(symbols)(result);
   return templateAliasStage(symbols)(result);
 }
 
@@ -333,7 +358,10 @@ function transform(value, symbols, context = "") {
     }
     if (context === "state_value") return symbols.states[value] ?? value;
     if (context === "bone_name" || context === "bone_parent") return symbols.bones[value.toLowerCase()] ?? value;
-    return replaceString(value, symbols);
+    // Translation keys such as "tile.ns:id.name" (minecraft:display_name) must follow the renamed id exactly like
+    // the matching .lang keys do, and the id there sits behind a "." which is normally left alone.
+    const translationKey = /^(?:tile|item|entity)\./.test(value);
+    return replaceString(value, symbols, { allowDotPrefix: translationKey, skipClientAliases: translationKey });
   }
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(
@@ -351,10 +379,16 @@ function transform(value, symbols, context = "") {
         childContext = "render_controller";
       } else if ((context === "sound_definitions" || context === "music_definitions") && symbols.refs[key]) {
         nextKey = refName(key, symbols.refs[key]);
-      } else if (context === "array_definition" && key.startsWith("array.")) {
-        nextKey = `array.${symbols.aliases[key.slice("array.".length)] ?? key.slice("array.".length)}`;
+      } else if (context === "array_definition" && /^array\./i.test(key)) {
+        const arrayName = key.slice("array.".length);
+        // Keep the original prefix casing: Bedrock uses "Array." in render controllers.
+        nextKey = `${key.slice(0, "array.".length)}${symbols.aliases[arrayName] ?? arrayName}`;
       } else if ((context === "animation_bones" || context === "bone_visibility") && symbols.bones[key.toLowerCase()]) {
         nextKey = symbols.bones[key.toLowerCase()];
+      } else if (context === "part_visibility") {
+        // Render controller part_visibility keys are bone names ("*" matches all). They must follow the renamed
+        // geometry bones and never fall through to the client aliases, which can share the text ("torch").
+        nextKey = symbols.bones[key.toLowerCase()] ?? key;
       } else if (context === "bones" && key === "name") childContext = "bone_name";
       else if (context === "bones" && key === "parent") childContext = "bone_parent";
       else if (context === "transition" && symbols.states[key]) nextKey = symbols.states[key];
@@ -382,6 +416,7 @@ function transform(value, symbols, context = "") {
       if (context === "render_controller" && key === "geometry") childContext = "render_geometry";
       if (context === "render_controller" && key === "textures") childContext = "render_textures";
       if (context === "render_controller" && key === "arrays") childContext = "arrays";
+      if (context === "render_controller" && key === "part_visibility") childContext = "part_visibility";
       if (context === "arrays") childContext = "array_definition";
       if (context === "geometry_root" && key === "bones") childContext = "bones";
       if (context === "geometry_root" && key === "bone_visibility") childContext = "bone_visibility";
@@ -431,7 +466,7 @@ export function obfuscateLang(source, symbols) {
     .map((line) => {
       if (!line || line.startsWith("#") || !line.includes("=")) return line;
       const separator = line.indexOf("=");
-      return `${replaceString(line.slice(0, separator), symbols, { allowDotPrefix: true })}${line.slice(separator)}`;
+      return `${replaceString(line.slice(0, separator), symbols, { allowDotPrefix: true, skipClientAliases: true })}${line.slice(separator)}`;
     })
     .join("");
 }

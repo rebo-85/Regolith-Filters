@@ -5,6 +5,7 @@ export const FIXED_DIRECTORIES = new Set(["models", "models/blocks", "models/ent
 
 export const FIXED_FILES = new Set([
   "manifest.json",
+  "item_catalog/crafting_item_catalog.json",
   "blocks.json",
   "sounds.json",
   "textures/textures_list.json",

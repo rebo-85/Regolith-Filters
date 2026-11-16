@@ -24,13 +24,27 @@ Generated keys and filenames use the same six-character lowercase letter format,
 
 Client-entity aliases are only obfuscated when their values resolve to definitions or assets present in the staged packs. Vanilla animation, geometry, material, and texture references are left unchanged.
 
+Client-only aliases (geometry, material, texture, animation and render array names such as `wheel`) are never rewritten inside scripts, `.lang` keys or translation-key strings. The game does not use those names there, and they are often plain words.
+
+Translation keys used as values in pack JSON (`minecraft:display_name` values such as `tile.ns:id.name`, and the `item.` and `entity.` equivalents) follow the renamed ids, the same way `.lang` keys do. `item_catalog/crafting_item_catalog.json` keeps its required name and location, but its ids and icons are rewritten.
+
+## Names that stay readable
+
+Bedrock matches a few names itself, and some features stop working when they are renamed. The filter leaves these alone regardless of the `obfuscate` and `exclude` settings:
+
+- `rightItem`, `leftItem`, `rightArm` and `leftArm` bones. Bedrock attaches held items to them, so renaming them makes entities that show blocks or items in their hands render nothing.
+- Bones named in a block's `bone_visibility` (inside `minecraft:geometry`, including permutations). Bedrock ignores the visibility of renamed bones there, so every bone of the block would show.
+- Bones named in a render controller's `part_visibility`, for the same reason.
+
+These names are kept in every file that uses them (geometry, animations, render controllers), so references still match. All other bones are still renamed. Wildcard patterns in `part_visibility` (such as `door_*`) cannot be renamed and are left as written.
+
 The filter also rewrites identifiers inside `.lang` translation keys after `name_ninja` runs, while preserving the human-readable translation values.
 
 ## Settings
 
 | Setting                        | Default           | Effect                                                                                                                                                                                                                                                                                        |
 | ------------------------------ | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `unicode`                      | `true`            | Encodes JSON string content as `\uXXXX` escapes. Does not change JSON structure; `format_version` keys are left readable. Set to `false` to disable.                                                                                                                                          |
+| `unicode`                      | `true`            | Encodes JSON string content as `\uXXXX` escapes. Does not change JSON structure; `format_version` and render controller `Array.<name>` keys are left readable. It adds little protection, since any JSON tool decodes it. Set to `false` to disable.                                          |
 | `flattenFolders`               | `true`            | Places obfuscated files directly under their pack root folders. Set to `false` to retain obfuscated category subfolders. When flattening, required lookup roots such as `models/blocks` and `models/entity` are preserved; files below those roots may still be obfuscated.                   |
 | `obfuscateFileNames`           | `true`            | Set to `false` to keep original file and folder names. Folders are still flattened if `flattenFolders` is on.                                                                                                                                                                                 |
 | `obfuscateFileContents`        | `true`            | Set to `false` to leave JSON and `.lang` contents alone apart from updating file path references. Does not apply to JavaScript files.                                                                                                                                                         |
@@ -42,6 +56,29 @@ The filter also rewrites identifiers inside `.lang` translation keys after `name
 | `scripts`                      | off               | Obfuscates JavaScript files. See [Scripts](#scripts).                                                                                                                                                                                                                                         |
 | `strict`                       | `false`           | Fails the build if any file could not be obfuscated. See [Errors](#errors).                                                                                                                                                                                                                   |
 | `mapDir`, `mapFile`, `profile` | see above         | Where the map file is stored.                                                                                                                                                                                                                                                                 |
+
+## Recommended setup
+
+Use the same settings in every profile you test or ship, so the pack you test in game is the pack you publish:
+
+```json
+{
+  "filter": "obfuscate_pack",
+  "settings": {
+    "unicode": false,
+    "strict": true,
+    "shuffleKeys": true,
+    "shuffleSeed": "my_addon",
+    "profile": "release"
+  }
+}
+```
+
+- `strict` fails the build instead of shipping a file that could not be obfuscated.
+- `shuffleKeys` with a fixed `shuffleSeed` gives the same key order on every build.
+- `profile` keeps a separate `release.map.json`, so experiments in other profiles cannot change the names your release uses. Back the map up and keep it out of the published pack.
+- Keep an unobfuscated profile (without this filter) for debugging.
+- Test a release build in game before publishing and check the content log.
 
 ## Scripts
 

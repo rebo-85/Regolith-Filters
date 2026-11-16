@@ -4,6 +4,14 @@ import crypto from "node:crypto";
 import { stripComments } from "./transformer.js";
 import { CATEGORIES, CATEGORY_PARENTS, SYMBOL_FORMAT, SYMBOL_GROUPS } from "./constants.js";
 
+// Internal category, never configurable: bones named in a block's bone_visibility or in a render controller's
+// part_visibility are always left readable, because Bedrock does not apply visibility to renamed bones.
+const BLOCK_VISIBILITY_CATEGORY = "visibilityBones";
+
+// Bone names the game looks up itself (held items attach to rightItem and leftItem, arms carry them), so they can never be renamed.
+const RESERVED_BONES = new Set(["rightitem", "leftitem", "rightarm", "leftarm"]);
+const boneCategory = (name) => (RESERVED_BONES.has(name) ? BLOCK_VISIBILITY_CATEGORY : "bones");
+
 export function makeKey(value) {
   const alphabet = "abcdefghijklmnopqrstuvwxyz";
   const digest = crypto.createHash("sha1").update(value).digest();
@@ -86,8 +94,10 @@ const RENDER_REFERENCE_CATEGORIES = { texture: "textures", Geometry: "geometry",
 function collectRenderDefinitions(controllers, symbols) {
   for (const [name, controller] of Object.entries(controllers ?? {})) {
     if (name.startsWith("controller.")) ensure(symbols, "refs", name, "renderControllers");
+    for (const entry of Array.isArray(controller.part_visibility) ? controller.part_visibility : [])
+      for (const bone of Object.keys(entry ?? {})) if (!bone.includes("*")) ensure(symbols, "bones", bone.toLowerCase(), BLOCK_VISIBILITY_CATEGORY);
     for (const values of Object.values(controller.arrays ?? {}))
-      for (const key of Object.keys(values ?? {})) ensureAlias(symbols, key.replace(/^array\./, ""), "renderArrays");
+      for (const key of Object.keys(values ?? {})) ensureAlias(symbols, key.replace(/^array\./i, ""), "renderArrays");
     for (const value of JSON.stringify(controller).matchAll(/(texture|Geometry|Material|Array)\.([A-Za-z_][\w.]*)/g))
       if (value[2] !== "default") ensureAlias(symbols, value[2], RENDER_REFERENCE_CATEGORIES[value[1]]);
   }
@@ -115,7 +125,8 @@ function collectDefinitions(value, symbols, source) {
   for (const name of Object.keys(value?.animations ?? {})) if (name.startsWith("animation.")) ensure(symbols, "refs", name, "animations");
   for (const geometry of value?.["minecraft:geometry"] ?? []) {
     if (typeof geometry.description?.identifier === "string") ensure(symbols, "refs", geometry.description.identifier, "geometry");
-    for (const bone of geometry.bones ?? []) if (typeof bone.name === "string") ensure(symbols, "bones", bone.name.toLowerCase(), "bones");
+    for (const bone of geometry.bones ?? [])
+      if (typeof bone.name === "string") ensure(symbols, "bones", bone.name.toLowerCase(), boneCategory(bone.name.toLowerCase()));
   }
   if (value?.sound_definitions)
     for (const name of Object.keys(value.sound_definitions))
@@ -132,6 +143,9 @@ function collectDefinitions(value, symbols, source) {
     if (!name.startsWith("minecraft:")) ensureAlias(symbols, name, "blockStates");
   const block = value?.["minecraft:block"];
   for (const components of [block?.components, ...(block?.permutations ?? []).map((permutation) => permutation.components)]) {
+    // Bedrock ignores renamed bones in a block's bone_visibility, so these bone names must stay readable.
+    for (const name of Object.keys(components?.["minecraft:geometry"]?.bone_visibility ?? {}))
+      ensure(symbols, "bones", name.toLowerCase(), BLOCK_VISIBILITY_CATEGORY);
     for (const name of Object.keys(components ?? {})) if (!name.startsWith("minecraft:")) ensureAlias(symbols, name, "blockComponents");
   }
   for (const name of Object.keys(value?.["minecraft:item"]?.components ?? {}))
@@ -201,7 +215,8 @@ export function applySymbolSettings(symbols, settings) {
 
   // The most specific setting wins: a category's own `obfuscate` value, else its parent's, else true.
   // `exclude` lists add up: a category excludes its own names and those listed on its parent.
-  const isEnabled = (category) => enabledByCategory[category] ?? enabledByCategory[CATEGORY_PARENTS[category]] ?? true;
+  const isEnabled = (category) =>
+    category !== BLOCK_VISIBILITY_CATEGORY && (enabledByCategory[category] ?? enabledByCategory[CATEGORY_PARENTS[category]] ?? true);
 
   // Bone names are stored lowercase because Bedrock matches them case-insensitively.
   const isExcluded = (group, category, name) =>
