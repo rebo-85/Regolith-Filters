@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { ENTITY_PATH_PATTERN, LOOT_TABLE_PATTERN, SOUND_DEFINITION_PATTERN, TEXTURE_SET_PATTERN } from "./constants.js";
+import { ENTITY_PATH_PATTERN, LOOT_TABLE_PATTERN, NO_SHUFFLE_PATTERN, SOUND_DEFINITION_PATTERN, TEXTURE_SET_PATTERN } from "./constants.js";
 import { applySymbolSettings, collectClientSymbols, collectSymbols } from "./symbols.js";
 import {
   obfuscateBlockJson,
@@ -11,6 +11,7 @@ import {
   obfuscateTextureList,
   obfuscateTextureSet,
   replaceScriptString,
+  minifyJson,
   resetReplacerCache
 } from "./transformer.js";
 
@@ -142,11 +143,15 @@ export function createPacker({ root, args, map, symbols, paths, mapFile, scriptO
         // Fixed name, but its entity and block ids still have to follow the renamed ids.
         fs.writeFileSync(target, obfuscateJson(source, symbols, "sounds_json"), "utf8");
       } else if (ext === ".json" && !paths.isFixedName(rel)) {
-        fs.writeFileSync(target, obfuscateJson(source, symbols), "utf8");
+        // The seed uses the original path, so the order stays the same from build to build.
+        const shuffleSeed = args.shuffleKeys === true && !NO_SHUFFLE_PATTERN.test(rel) ? `${args.shuffleSeed ?? ""}:${packName}/${rel}` : undefined;
+        fs.writeFileSync(target, obfuscateJson(source, symbols, "", { shuffleSeed }), "utf8");
       } else if (rel === "blocks.json") {
         fs.writeFileSync(target, obfuscateBlockJson(source, symbols), "utf8");
       } else if (rel === "textures/textures_list.json") {
         fs.writeFileSync(target, obfuscateTextureList(source, symbols), "utf8");
+      } else if (args.minify !== false && (rel === "manifest.json" || rel === "texts/languages.json")) {
+        fs.writeFileSync(target, minifyJson(source), "utf8");
       } else if (ext === ".lang") {
         fs.writeFileSync(target, obfuscateLang(source, symbols), "utf8");
       } else fs.copyFileSync(source, target);

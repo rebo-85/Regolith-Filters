@@ -20,6 +20,8 @@ export const TEXTURE_SET_PATTERN = /\.texture_set\.json$/i;
 export const SOUND_DEFINITION_PATTERN = /^sounds\/(?:sound|music)_definitions\.json$/i;
 export const LOOT_TABLE_PATTERN = /^loot_tables\//i;
 export const ENTITY_PATH_PATTERN = /\/entity\//i;
+// Pack JSON whose key order may carry meaning, so `shuffleKeys` never touches it.
+export const NO_SHUFFLE_PATTERN = /^ui\//i;
 
 // Symbol categories, as used by the `obfuscate` and `exclude` settings.
 // Parent categories group related leaf categories: a setting on a parent applies to every child,

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 let unicodeEnabled = true;
+let minifyEnabled = true;
 
 // JSON.parse/stringify turns 0.0 into 0, which Bedrock rejects for float properties.
 // Decimal literals are wrapped in marker strings before parsing and unwrapped after stringifying.
@@ -22,6 +23,10 @@ function parseJson(text) {
 
 export function setUnicodeEnabled(enabled) {
   unicodeEnabled = enabled === true;
+}
+
+export function setMinifyEnabled(enabled) {
+  minifyEnabled = enabled === true;
 }
 
 function encodeUnicodeString(value) {
@@ -66,8 +71,62 @@ export function unicodeJsonText(text) {
   return result;
 }
 
-function serialize(value, indent) {
-  return unicodeJsonText(restoreFloats(JSON.stringify(value, null, indent)));
+const NUMERIC_KEY = /^-?\d+(?:\.\d+)?$/;
+const PIN_FIRST = new Set(["format_version"]);
+// Conservative: Molang variable definitions might be order-sensitive.
+const KEEP_ORDER_OWN_KEYS = new Set(["variables"]);
+
+function hashKey(text) {
+  let hash = 0x811c9dc5;
+  for (let idx = 0; idx < text.length; idx++) {
+    hash ^= text.charCodeAt(idx);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  hash ^= hash >>> 15;
+  hash = Math.imul(hash, 0x2c1b3c6d);
+  hash ^= hash >>> 12;
+  return hash >>> 0;
+}
+
+// Orders keys by hash(seed + key path + key), so the order is deterministic and a key added later
+// does not move its siblings. Arrays are never reordered; only object keys are.
+function orderKeys(keys, path, seed) {
+  if (keys.length < 2) return keys;
+  // Keyframe times and index-like keys: leave as written.
+  if (keys.every((key) => NUMERIC_KEY.test(key))) return keys;
+  // path ends with this object's own key. Event bodies (add/remove/set_property...) keep their order.
+  if (KEEP_ORDER_OWN_KEYS.has(path[path.length - 1]) || path[path.length - 2] === "events") return keys;
+  const prefix = path.join("/");
+  const rank = new Map(keys.map((key) => [key, hashKey(`${seed}\0${prefix}\0${key}`)]));
+  const pinned = keys.filter((key) => PIN_FIRST.has(key));
+  const rest = keys.filter((key) => !PIN_FIRST.has(key)).sort((a, b) => rank.get(a) - rank.get(b) || (a < b ? -1 : 1));
+  return [...pinned, ...rest];
+}
+
+// Written out by hand because rebuilding a plain object would put integer-like keys back in numeric order.
+function stringifyShuffled(value, indent, seed, path = [], depth = 0) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  const unit = typeof indent === "number" ? " ".repeat(indent) : (indent ?? "");
+  const inner = unit ? `\n${unit.repeat(depth + 1)}` : "";
+  const close = unit ? `\n${unit.repeat(depth)}` : "";
+  if (Array.isArray(value)) {
+    if (!value.length) return "[]";
+    const items = value.map((item, idx) => stringifyShuffled(item, indent, seed, [...path, String(idx)], depth + 1));
+    return `[${inner}${items.join(`,${inner}`)}${close}]`;
+  }
+  const keys = Object.keys(value);
+  if (!keys.length) return "{}";
+  const parts = orderKeys(keys, path, seed).map(
+    (key) => `${JSON.stringify(key)}:${unit ? " " : ""}${stringifyShuffled(value[key], indent, seed, [...path, key], depth + 1)}`
+  );
+  return `{${inner}${parts.join(`,${inner}`)}${close}}`;
+}
+
+// `indent` is only used when minify is off; with minify on, every file is written on one line.
+function serialize(value, indent = 2, shuffleSeed) {
+  const gap = minifyEnabled ? undefined : indent;
+  const json = shuffleSeed === undefined ? JSON.stringify(value, null, gap) : stringifyShuffled(value, gap, shuffleSeed);
+  return unicodeJsonText(restoreFloats(json));
 }
 
 export function stripComments(text) {
@@ -340,8 +399,14 @@ function transform(value, symbols, context = "") {
   );
 }
 
-export function obfuscateJson(source, symbols, context = "") {
-  return serialize(transform(parseJson(fs.readFileSync(source, "utf8")), symbols, context));
+export function obfuscateJson(source, symbols, context = "", { shuffleSeed } = {}) {
+  return serialize(transform(parseJson(fs.readFileSync(source, "utf8")), symbols, context), undefined, shuffleSeed);
+}
+
+// For files that keep their names and contents but can still be written on one line (manifest.json, languages.json).
+// Unicode escaping is skipped on purpose: tools that read these files expect plain text.
+export function minifyJson(source) {
+  return restoreFloats(JSON.stringify(parseJson(fs.readFileSync(source, "utf8"))));
 }
 
 export function obfuscateJsonText(source) {

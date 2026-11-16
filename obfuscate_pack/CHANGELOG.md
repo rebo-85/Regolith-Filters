@@ -1,5 +1,12 @@
 # obfuscate_pack
 
+## 1.4.0
+
+### Minor Changes
+
+- Add `minify` (default `true`): all JSON is written on one line, including `blocks.json`, `textures/textures_list.json`, `manifest.json` and `texts/languages.json`. Set `minify: false` for indented output.
+- Add `shuffleKeys` and `shuffleSeed` to shuffle JSON object key order deterministically. Arrays, `format_version`, numeric-key objects, event bodies, `variables`, `ui/` files and fixed-name files keep their order.
+
 ## 1.3.1
 
 ### Patch Changes

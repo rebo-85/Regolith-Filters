@@ -4,7 +4,7 @@ import path from "node:path";
 import { createPacker } from "./packer.js";
 import { createPathMapper } from "./path-utils.js";
 import { createSymbols } from "./symbols.js";
-import { setUnicodeEnabled } from "./transformer.js";
+import { setMinifyEnabled, setUnicodeEnabled } from "./transformer.js";
 import { MAP_FORMAT } from "./constants.js";
 
 const root = process.env.ROOT_DIR;
@@ -12,6 +12,10 @@ if (!root) throw new Error("ROOT_DIR environment variable is required");
 
 const args = process.argv[2] ? JSON.parse(process.argv[2]) : {};
 setUnicodeEnabled(args.unicode !== false);
+if (args.minify !== undefined && typeof args.minify !== "boolean") throw new TypeError("minify must be a boolean");
+setMinifyEnabled(args.minify !== false);
+if (args.shuffleKeys !== undefined && typeof args.shuffleKeys !== "boolean") throw new TypeError("shuffleKeys must be a boolean");
+if (args.shuffleSeed !== undefined && typeof args.shuffleSeed !== "string") throw new TypeError("shuffleSeed must be a string");
 
 function globToRegExp(pattern) {
   const normalized = pattern.replace(/\\/g, "/");
@@ -42,7 +46,11 @@ function createScriptObfuscation(settings) {
   if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
     throw new TypeError("scripts must be an object with include and config settings");
   }
-  if (!Array.isArray(settings.include) || settings.include.length === 0 || settings.include.some((pattern) => typeof pattern !== "string" || !pattern.trim())) {
+  if (
+    !Array.isArray(settings.include) ||
+    settings.include.length === 0 ||
+    settings.include.some((pattern) => typeof pattern !== "string" || !pattern.trim())
+  ) {
     throw new TypeError("scripts.include must be a non-empty array of glob patterns");
   }
   if (typeof settings.config !== "string" || !settings.config.trim()) {
