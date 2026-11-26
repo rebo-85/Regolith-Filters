@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "changeset": "changeset",
+    "test": "node --test",
     "version": "changeset version && node scripts/sync-versions.js",
     "release": "node scripts/check-release.js && changeset tag",
     "release:prepare": "changeset && corepack pnpm run version && corepack pnpm install --lockfile-only && git add pnpm-lock.yaml"
