@@ -2,6 +2,8 @@
 
 Written 2026-11-26 from a snapshot of this repository and of the add-ons workspace (11 projects). Nothing here has been run. "Verified" means read in the code or config; "not verified" means a guess or a measurement nobody made.
 
+**Status 2026-11-27:** tasks 1 to 6 are done and released (tests and CI in #3 and #4, `bump_manifest` 1.1.2 in #5, `packager` 0.6.0 in #8, in-game load recorded in #11); tasks 3 and 4 were done in #1. Task 7 was dropped because no pack has been released yet. The add-ons section and the questions below are from 2026-11-26 and out of date; run `npm run filters:check` in the add-ons workspace.
+
 ## What the add-ons workspace actually does with the filters (verified from its `config.json` files)
 
 - All 11 projects pin `bump_manifest@1.1.1`, `brarchive@0.6.1`, `packager@0.5.4`. `obfuscate_pack` is `1.3.1` in 8 projects and `1.4.1` in 3.
