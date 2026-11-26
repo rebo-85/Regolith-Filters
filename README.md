@@ -40,6 +40,10 @@ The task calls this package script:
 corepack pnpm run release:prepare
 ```
 
+## Requirements
+
+The filters run on the Node.js that Regolith finds on the machine. Use Node 20.15 or later; every filter package declares this in `engines`.
+
 ## Regolith configuration
 
 Each release tag includes the standalone filter directories at the repository
