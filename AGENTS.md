@@ -12,7 +12,7 @@ The owner's machine holds this repository, the add-ons workspace and `MCBE-Utils
 
 ## Hard rules
 
-- Never push to `main`, never `--force`. Branch (`type/topic`), pull request, merge on GitHub. Pushing a new feature branch is pre-approved when the gates pass; opening and merging pull requests stays with the owner.
+- Never push to `main`, never `--force`. Branch (`type/topic`), pull request, merge on GitHub. Pushing a new feature branch is pre-approved when the gates pass; a pull request is opened and squash-merged only through pr-merge.mjs (the open-and-merge-pr skill in the add-ons workspace), for branches the block names and when every check passed; the Changesets release pull request merges with --no-checks-ok and its exact file list.
 - Never publish locally. Releases go through changesets and `.github/workflows/release.yml`. Do not run `changeset version`, `changeset tag` or `release:prepare` unless asked.
 - Never change `MAP_FORMAT` or any default of `obfuscate_pack` in a patch or minor release. Changed names break the saved worlds of players. Anything that changes built output needs the owner's yes and an in-game test first.
 - Never edit version numbers, tags or generated changelog entries, except to fix encoding.
@@ -24,7 +24,7 @@ After changing a filter, add a changeset that names only the affected filters an
 
 ## Open work
 
-`docs/IMPROVEMENT_PLAN.md` lists the tasks. Tasks 3 and 4 (changelog encoding, `engines`, Upgrading notes) are done. Tasks 1 and 2 (tests, pull request CI) change no built output and can proceed. Tasks 5 to 7 change output or release behavior and need the owner's yes. The plan's description of the add-ons workspace is from 2026-11-26 and is out of date; run `npm run filters:check` there for the current state.
+`docs/IMPROVEMENT_PLAN.md` lists the tasks. Tasks 3 and 4 (changelog encoding, `engines`, Upgrading notes) are done. Tasks 1 to 5 are done: node:test tests for all four filters with fixtures generated in temp folders, pull request CI, and bump_manifest failing the build on a bad manifest. Task 6 (packager deterministic zips) changes built output and needs an in-game import test before a project pins it. Task 7 was dropped: no pack has been released yet, so names may still change. The plan's description of the add-ons workspace is from 2026-11-26 and is out of date; run `npm run filters:check` there for the current state.
 
 ## Keeping this file useful
 
