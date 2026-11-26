@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const zlib = require("zlib");
 
 const root = process.env.ROOT_DIR;
 if (!root) throw new Error("ROOT_DIR environment variable is required");
@@ -44,20 +45,27 @@ function walk(dir, files = []) {
   return files;
 }
 
-function crc32(data) {
-  let crc = 0xffffffff;
-  for (const value of data) {
-    crc ^= value;
-    for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+// Fixed timestamp, so the same input gives the same bytes. SOURCE_DATE_EPOCH (seconds) overrides it.
+// ZIP stores local time without a zone; UTC is used so the result does not depend on the machine.
+function dosDateTime() {
+  const epoch = process.env.SOURCE_DATE_EPOCH;
+  if (epoch !== undefined && epoch !== "" && !/^\d+$/.test(epoch)) {
+    throw new Error(`SOURCE_DATE_EPOCH must be a whole number of seconds, got: ${epoch}`);
   }
-  return (crc ^ 0xffffffff) >>> 0;
+  const date = epoch ? new Date(Number(epoch) * 1000) : new Date(Date.UTC(1980, 0, 1, 0, 0, 0));
+  const year = date.getUTCFullYear();
+  if (year < 1980 || year > 2107) throw new Error(`SOURCE_DATE_EPOCH is outside the range ZIP can store (1980 to 2107): ${epoch}`);
+  return {
+    date: ((year - 1980) << 9) | ((date.getUTCMonth() + 1) << 5) | date.getUTCDate(),
+    time: (date.getUTCHours() << 11) | (date.getUTCMinutes() << 5) | Math.floor(date.getUTCSeconds() / 2)
+  };
 }
 
-function dosDateTime(date = new Date()) {
-  return {
-    date: ((date.getFullYear() - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate(),
-    time: (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2)
-  };
+// Deflate when it makes the entry smaller, store it otherwise (PNGs and nested zips do not shrink).
+function compress(data) {
+  if (data.length === 0) return { method: 0, bytes: data };
+  const deflated = zlib.deflateRawSync(data, { level: 9 });
+  return deflated.length < data.length ? { method: 8, bytes: deflated } : { method: 0, bytes: data };
 }
 
 function createZip(entries) {
@@ -69,35 +77,38 @@ function createZip(entries) {
   for (const entry of entries) {
     const name = Buffer.from(entry.name.replace(/\\/g, "/"), "utf8");
     const data = Buffer.isBuffer(entry.data) ? entry.data : fs.readFileSync(entry.data);
-    const crc = crc32(data);
+    const crc = zlib.crc32(data);
+    const { method, bytes } = compress(data);
     const header = Buffer.alloc(30 + name.length);
     header.writeUInt32LE(0x04034b50, 0);
     header.writeUInt16LE(20, 4);
     header.writeUInt16LE(0x800, 6);
+    header.writeUInt16LE(method, 8);
     header.writeUInt16LE(stamp.time, 10);
     header.writeUInt16LE(stamp.date, 12);
     header.writeUInt32LE(crc, 14);
-    header.writeUInt32LE(data.length, 18);
+    header.writeUInt32LE(bytes.length, 18);
     header.writeUInt32LE(data.length, 22);
     header.writeUInt16LE(name.length, 26);
     name.copy(header, 30);
-    local.push(header, data);
+    local.push(header, bytes);
 
     const record = Buffer.alloc(46 + name.length);
     record.writeUInt32LE(0x02014b50, 0);
     record.writeUInt16LE(20, 4);
     record.writeUInt16LE(20, 6);
     record.writeUInt16LE(0x800, 8);
+    record.writeUInt16LE(method, 10);
     record.writeUInt16LE(stamp.time, 12);
     record.writeUInt16LE(stamp.date, 14);
     record.writeUInt32LE(crc, 16);
-    record.writeUInt32LE(data.length, 20);
+    record.writeUInt32LE(bytes.length, 20);
     record.writeUInt32LE(data.length, 24);
     record.writeUInt16LE(name.length, 28);
     record.writeUInt32LE(offset, 42);
     name.copy(record, 46);
     central.push(record);
-    offset += header.length + data.length;
+    offset += header.length + bytes.length;
   }
 
   const centralData = Buffer.concat(central);
