@@ -2,5 +2,8 @@
   "name": "brarchive",
   "version": "0.6.1",
   "private": true,
+  "engines": {
+    "node": ">=20.15"
+  },
   "description": "Regolith filter that archives staged behavior and resource packs."
 }

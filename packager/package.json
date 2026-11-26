@@ -2,5 +2,8 @@
   "name": "packager",
   "version": "0.5.4",
   "private": true,
+  "engines": {
+    "node": ">=20.15"
+  },
   "description": "Regolith filter that packages staged Bedrock packs as mcpack and mcaddon files."
 }

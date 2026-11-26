@@ -80,6 +80,15 @@ Use the same settings in every profile you test or ship, so the pack you test in
 - Keep an unobfuscated profile (without this filter) for debugging.
 - Test a release build in game before publishing and check the content log.
 
+## Upgrading
+
+Before moving a project to a new version of this filter:
+
+- Commit the map file (`map.json`, or `release.map.json` when `profile` is `release`). A build from a fresh clone without it invents new names, which breaks the saved worlds of players who already have the pack.
+- Give the release profile its own map with `"profile": "release"`, so builds in other profiles cannot change the names the release uses.
+- After the first build on the new version, check `git diff` of the map file. Existing entries should keep their names; a renamed entry is a breaking change for players.
+- Read the changelog between the two versions. For example, 1.4.0 minifies all JSON by default, so test the pack in game before releasing.
+
 ## Scripts
 
 JavaScript files can be obfuscated by setting `scripts` in the filter arguments. `include` accepts pack-qualified glob patterns, `config` is a path to a `javascript-obfuscator` options JSON file, and `requirements` is the package directory where `javascript-obfuscator` is installed. Relative paths are resolved from the project root, and all three fields are required:

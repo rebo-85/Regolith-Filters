@@ -52,5 +52,4 @@
 
 ### Minor Changes
 
-- �
 - update

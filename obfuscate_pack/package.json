@@ -2,6 +2,9 @@
   "name": "obfuscate_pack",
   "version": "1.4.1",
   "private": true,
+  "engines": {
+    "node": ">=20.15"
+  },
   "description": "Regolith filter that obfuscates pack contents, filenames, and optional JavaScript scripts.",
   "type": "module",
   "dependencies": {
